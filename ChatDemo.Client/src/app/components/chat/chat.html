@@ -1,0 +1,35 @@
+<div class="chat-container">
+  <div class="chat-header">
+    <h2>🤖 ChatDemo - AI Assistant</h2>
+    <p>Powered by Model Context Protocol (MCP)</p>
+  </div>
+
+  <div class="chat-messages" #messagesContainer>
+    <div *ngFor="let message of messages" [class]="'message ' + message.type">
+      <div class="message-content">
+        <strong>{{message.sender}}:</strong>
+        <span [innerHTML]="message.htmlContent || message.content"></span>
+      </div>
+      <div class="message-time">{{message.timestamp | date:'short'}}</div>
+    </div>
+  </div>
+
+  <div class="chat-input">
+    <form (ngSubmit)="sendMessage()" #chatForm="ngForm">
+      <div class="input-group">
+        <input 
+          type="text" 
+          [(ngModel)]="currentMessage" 
+          name="message"
+          placeholder="Type your message..." 
+          class="message-input"
+          [disabled]="isLoading"
+          required>
+        <button type="submit" [disabled]="!currentMessage.trim() || isLoading" class="send-button">
+          <span *ngIf="!isLoading">Send 📤</span>
+          <span *ngIf="isLoading">Sending... ⏳</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
