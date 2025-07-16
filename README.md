@@ -13,7 +13,7 @@ A modern AI-powered chat application built with .NET and Angular, featuring Mode
 - 🤖 Interactive chat interface built with Angular
 - 🔧 Model Context Protocol (MCP) server with hello world tools
 - 🎯 CORS-enabled API ready for integration
-- ⚡ Real-time chat simulation
+- ⚡ Real-time chat with ChatGPT client
 
 ## MCP Tools Available
 
