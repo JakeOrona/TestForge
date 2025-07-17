@@ -23,6 +23,9 @@ The MCP server includes the following demo tools:
 2. **GetAppInfo** - Information about the ChatDemo application
 3. **Echo** - Echoes messages back to the client
 4. **ReverseText** - Reverses any provided text
+5. **GetCurrentTime** - Returns current date and time
+6. **GenerateRandomNumber** - Generates random number between specified ranges
+7. **GenerateTestCasesFromJiraXml** - Parses Jira story XML and generates test case steps for web UI automation (scaffolding)
 
 ## Getting Started
 
