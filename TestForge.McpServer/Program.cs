@@ -4,7 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
-using ChatDemo.McpServer.Models;
+using TestForge.McpServer.Models;
 
 
 var builder = WebApplication.CreateBuilder(args);

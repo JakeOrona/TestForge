@@ -1,10 +1,10 @@
-# ChatDemo - AI-Powered Test Case Generation Platform with Model Context Protocol
+# TestForge - AI-Powered Test Case Generation Platform with Model Context Protocol
 
 A comprehensive AI-powered test case generation platform built with .NET and Angular, featuring advanced Model Context Protocol (MCP) integration for intelligent Jira analysis and TestRail test case generation.
 
 ## Project Structure
 
-- **ChatDemo.McpServer** - Model Context Protocol server with 13 specialized tools for intelligent test case generation
+- **TestForge.McpServer** - Model Context Protocol server with 13 specialized tools for intelligent test case generation
 - **guidance/** - Documentation and instruction files
 - **Documentation files** - Various .md files for setup, debugging, and enhancement guides
 
@@ -68,7 +68,7 @@ This platform enables intelligent test case generation through structured LLM co
 
 1. **Start the MCP Server:**
    ```bash
-   cd ChatDemo.McpServer
+   cd TestForge.McpServer
    ASPNETCORE_URLS="http://localhost:5001" dotnet run
    ```
 
@@ -142,7 +142,7 @@ curl -X POST http://localhost:5001/mcp \
 ```json
 {
   "mcpServers": {
-    "local-jira-parser": {
+    "testforge-mcp-server": {
       "command": "/usr/local/bin/npx",
       "args": [
         "mcp-remote",
@@ -175,7 +175,7 @@ npx mcp-remote --help
 **Debugging**: 
 - See `CLAUDE-DESKTOP-DEBUG-PROMPT.md` for comprehensive debugging steps
 - Use `validate_jira_xml` tool for XML diagnostics
-- Check logs: `~/Library/Logs/Claude/mcp-server-local-jira-parser.log`
+- Check logs: `~/Library/Logs/Claude/mcp-server-testforge-mcp-server.log`
 
 
 ## Technology Stack
@@ -196,7 +196,7 @@ npx mcp-remote --help
 dotnet build
 
 # Run the MCP server
-cd ChatDemo.McpServer
+cd TestForge.McpServer
 ASPNETCORE_URLS="http://localhost:5001" dotnet run
 ```
 
@@ -228,11 +228,11 @@ The MCP server demonstrates basic tool creation with the new C# SDK. Tools are d
 
 ```csharp
 [McpServerToolType]
-public static class ChatDemoTools
+public static class TestForgeTools
 {
     [McpServerTool, Description("Says hello to the user.")]
     public static string SayHello(string name = "World") => 
-        $"Hello from ChatDemo MCP Server, {name}! 🎉";
+        $"Hello from TestForge MCP Server, {name}! 🎉";
 }
 ```
 

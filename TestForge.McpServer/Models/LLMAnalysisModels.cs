@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace ChatDemo.McpServer.Models;
+namespace TestForge.McpServer.Models;
 
 /// <summary>
 /// Represents a comprehensive analysis of a Jira ticket optimized for LLM processing

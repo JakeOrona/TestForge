@@ -1,4 +1,4 @@
-namespace ChatDemo.McpServer.Models;
+namespace TestForge.McpServer.Models;
 
 /// <summary>
 /// Configuration settings for Jira API integration

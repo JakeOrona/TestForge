@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChatDemo.McpServer", "ChatDemo.McpServer\ChatDemo.McpServer.csproj", "{62D94F7B-C622-4D4D-A9CC-981D8C891207}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestForge.McpServer", "TestForge.McpServer\TestForge.McpServer.csproj", "{62D94F7B-C622-4D4D-A9CC-981D8C891207}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

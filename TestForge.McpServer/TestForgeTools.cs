@@ -6,9 +6,9 @@ using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Net.Http;
 using System.Text;
-using ChatDemo.McpServer.Models;
+using TestForge.McpServer.Models;
 
-namespace ChatDemo.McpServer;
+namespace TestForge.McpServer;
 
 /// <summary>
 /// Represents a parsed Jira story with extracted fields
@@ -74,7 +74,7 @@ public record TestRailGenerationResult
 }
 
 [McpServerToolType]
-public static class ChatDemoTools
+public static class TestForgeTools
 {
     [McpServerTool, Description("Gets current date and time.")]
     public static string GetCurrentTime() => $"Current time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
