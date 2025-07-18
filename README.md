@@ -1,8 +1,6 @@
-# ChatDemo - AI Chat Appl6. **GetCurrentTime** - Returns current date and time
-7. **GenerateRandomNumber** - Generates random number between specified ranges
-8. **GenerateTestCasesFromJiraXml** - Parses Jira story XML and generates Given/When/Then test case steps for web UI automation. **Now includes automatic XML cleaning** to handle raw Jira XML exports with duplicate attributes, malformed HTML, and other common formatting issues without requiring manual cleanup.tion with Model Context Protocol
+# ChatDemo - AI-Powered Test Case Generation Platform with Model Context Protocol
 
-A modern AI-powered chat application built with .NET and Angular, featuring Model Context Protocol (MCP) integration for enhanced AI capabilities.
+A comprehensive AI-powered test case generation platform built with .NET and Angular, featuring advanced Model Context Protocol (MCP) integration for intelligent Jira analysis and TestRail test case generation.
 
 ## Project Structure
 
@@ -13,21 +11,76 @@ A modern AI-powered chat application built with .NET and Angular, featuring Mode
 ## Features
 
 - 🤖 Interactive chat interface built with Angular
-- 🔧 Model Context Protocol (MCP) server with hello world tools
-- 🎯 CORS-enabled API ready for integration
+- 🧠 **LLM-Enhanced Analysis** - Structured data extraction optimized for AI enhancement
+- 🔧 **Intelligent Test Case Generation** - AI-powered TestRail test case creation from Jira tickets
+- 📊 **Complexity Scoring** - Automated complexity analysis with confidence metrics
+- 🛠️ **Advanced XML Processing** - Robust parsing with automatic error recovery
+- 🎯 **Claude Desktop Integration** - Full MCP integration with debugging tools
+- 📋 **Enhanced Flow Support** - User → LLM → MCP Tools → Enhanced Test Cases
 - ⚡ Real-time chat with ChatGPT client
+- 🔧 Model Context Protocol (MCP) server with 13 specialized tools
+- 🎯 CORS-enabled API ready for integration
 
 ## MCP Tools Available
 
-The MCP server includes the following demo tools:
+The MCP server provides **13 specialized tools** for intelligent test case generation:
 
+### 🎯 Core Demo Tools
 1. **SayHello** - Personalized greeting with optional name parameter
 2. **GetAppInfo** - Information about the ChatDemo application
 3. **Echo** - Echoes messages back to the client
 4. **ReverseText** - Reverses any provided text
 5. **GetCurrentTime** - Returns current date and time
 6. **GenerateRandomNumber** - Generates random number between specified ranges
-7. **GenerateTestCasesFromJiraXml** - Parses Jira story XML and generates Given/When/Then test case steps for web UI automation
+
+### 🧠 LLM-Enhanced Analysis Tools
+7. **AnalyzeJiraTicketForLLM** - Analyzes Jira tickets and returns structured data optimized for LLM enhancement with complexity scoring and test area recommendations
+8. **GenerateTestCaseTemplates** - Creates baseline test case templates that LLMs can enhance and expand with metadata and guidance
+9. **ExtractUIComponentsAnalysis** - Identifies UI elements and interactions from ticket descriptions with confidence scoring
+10. **ExtractBusinessLogicAnalysis** - Extracts business rules and validation logic with test scenario recommendations
+
+### 🔧 Advanced XML Processing Tools
+11. **ValidateJiraXml** - Validates XML structure and provides detailed diagnostic information about parsing issues
+12. **CleanJiraXml** - Cleans raw Jira XML exports to fix common formatting issues and structural problems
+13. **GenerateTestCasesFromJiraXml** - Parses Jira story XML and generates TestRail-compatible test cases with enhanced error handling
+
+### 🛠️ Enhanced XML Cleaning Capabilities
+
+The XML processing tools include comprehensive cleaning to handle common issues in raw Jira XML exports:
+
+- **Missing Closing Tags** - Automatically adds missing `</comments>` and other structural closing tags
+- **Malformed Comment Content** - Wraps HTML content in CDATA sections to prevent parsing errors
+- **Duplicate Attributes** - Resolves duplicate `rel`, `class`, `data-account-id` attributes (keeps last value)
+- **HTML Entity Escaping** - Properly escapes unescaped ampersands and special characters
+- **Invalid XML Characters** - Removes control characters that break XML parsing
+- **Nested Structure Repair** - Fixes common structural problems in Jira exports
+- **Automatic Error Recovery** - If initial parsing fails, automatically applies cleaning and retries
+
+**Result**: You can copy-paste raw Jira XML exports directly without manual cleanup!
+
+## 🚀 Enhanced Flow: User → LLM → MCP Tools → Enhanced Test Cases
+
+This platform enables intelligent test case generation through structured LLM collaboration:
+
+### Flow Architecture
+1. **User** provides raw Jira XML or ticket ID
+2. **LLM** calls MCP tools for structured analysis:
+   - `validate_jira_xml` - Diagnose XML issues
+   - `clean_jira_xml` - Fix common problems
+   - `analyze_jira_ticket_for_llm` - Extract structured data
+   - `generate_test_case_templates` - Create baseline templates
+   - `extract_ui_components_analysis` - Identify UI elements
+   - `extract_business_logic_analysis` - Extract business rules
+3. **MCP Tools** provide clean, structured JSON data optimized for AI consumption
+4. **LLM** synthesizes insights and generates comprehensive test cases
+5. **Enhanced Test Cases** - Intelligent, prioritized test scenarios ready for TestRail
+
+### Benefits
+- **Structured Analysis** - Consistent, JSON-formatted data for LLM processing
+- **Complexity-Aware** - Prioritizes testing efforts based on complexity analysis
+- **Confidence Scoring** - Provides transparency in analysis quality
+- **Automatic Recovery** - Handles malformed XML without manual intervention
+- **Comprehensive Coverage** - Multi-faceted analysis ensures thorough testing
 
 ## Getting Started
 
@@ -121,30 +174,57 @@ curl -X POST http://localhost:5001/mcp \
 
 **Note**: The MCP Inspector (`npx @modelcontextprotocol/inspector`) is designed for STDIO-based MCP servers, not HTTP-based servers like this .NET implementation.
 
-### Claude Integration
+### 🎯 Claude Desktop Integration
+
+**Configuration File**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+**Recommended Configuration**:
 ```json
 {
   "mcpServers": {
-    "my-mcp-server": {
-      "command": "node",
+    "local-jira-parser": {
+      "command": "/usr/local/bin/npx",
       "args": [
-        "C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npx-cli.js",
         "mcp-remote",
-        "https://[YOUR_IP]:5003/mcp"
+        "http://localhost:5001/mcp"
       ],
       "env": {
-        "NODE_TLS_REJECT_UNAUTHORIZED": "0"
+        "NODE_ENV": "production"
       }
     }
   }
 }
 ```
 
+**Prerequisites**:
+```bash
+# Install mcp-remote package
+npm install -g mcp-remote
+
+# Verify installation
+which npx
+npx mcp-remote --help
+```
+
+**Testing Steps**:
+1. Start the MCP server: `ASPNETCORE_URLS="http://localhost:5001" dotnet run`
+2. Test manually: `npx mcp-remote http://localhost:5001/mcp`
+3. Restart Claude Desktop
+4. Verify all 13 tools are available in Claude Desktop
+
+**Debugging**: 
+- See `CLAUDE-DESKTOP-DEBUG-PROMPT.md` for comprehensive debugging steps
+- Use `validate_jira_xml` tool for XML diagnostics
+- Check logs: `~/Library/Logs/Claude/mcp-server-local-jira-parser.log`
+
 
 ## Technology Stack
 
 - **Backend**: .NET 9, ASP.NET Core, Model Context Protocol SDK
 - **Frontend**: Angular 19, TypeScript, RxJS
+- **AI Integration**: LLM-optimized JSON output, confidence scoring, structured analysis
+- **XML Processing**: Advanced parsing with automatic error recovery and validation
+- **Test Case Generation**: TestRail-compatible output with comprehensive step generation
 - **Tools**: VS Code, GitHub Copilot, MCP integration
 
 ## Development
@@ -161,6 +241,28 @@ ng build
 ng test
 ```
 
+### 🔧 Troubleshooting XML Issues
+
+If you encounter XML parsing errors:
+
+1. **Use the diagnostic tools**:
+   ```bash
+   # Test XML validation
+   curl -X POST http://localhost:5001/mcp -H "Content-Type: application/json" -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "validate_jira_xml", "arguments": {"jiraXml": "YOUR_XML_HERE"}}}'
+   ```
+
+2. **Clean problematic XML**:
+   ```bash
+   # Use the cleaning tool
+   curl -X POST http://localhost:5001/mcp -H "Content-Type: application/json" -d '{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "clean_jira_xml", "arguments": {"rawXml": "YOUR_XML_HERE"}}}'
+   ```
+
+3. **Common Issues Fixed Automatically**:
+   - Missing `</comments>` closing tags
+   - Malformed HTML in comment content
+   - Duplicate XML attributes
+   - Invalid characters and entities
+
 ### MCP Server Development
 
 The MCP server demonstrates basic tool creation with the new C# SDK. Tools are defined as static methods with attributes:
@@ -174,3 +276,31 @@ public static class ChatDemoTools
         $"Hello from ChatDemo MCP Server, {name}! 🎉";
 }
 ```
+
+## 📚 Documentation
+
+- **Enhanced Flow Guide** - `ENHANCED-FLOW-PROMPT.md`
+- **XML Parser Debugging** - `XML-PARSER-FIX-PROMPT.md`
+- **Claude Desktop Setup** - `CLAUDE-DESKTOP-DEBUG-PROMPT.md`
+- **Fix Summary** - `XML-PARSER-FIX-SUMMARY.md`
+
+## 🎯 Use Cases
+
+### For QA Teams
+- **Automated Test Case Generation** - Convert Jira tickets to TestRail test cases
+- **Complexity Analysis** - Prioritize testing efforts based on AI-driven complexity scoring
+- **Comprehensive Coverage** - Generate positive, negative, and edge case scenarios
+
+### For Development Teams
+- **Requirements Analysis** - Extract UI components and business logic from tickets
+- **Test Planning** - Get structured analysis for better test coverage planning
+- **Integration Testing** - Identify integration points and complexity areas
+
+### For LLM Applications
+- **Structured Data** - Clean, consistent JSON output optimized for AI consumption
+- **Confidence Scoring** - Transparent quality metrics for AI decision-making
+- **Enhanced Workflows** - User → LLM → MCP → Enhanced Output patterns
+
+---
+
+*Last updated: July 18, 2025*

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
+using ChatDemo.McpServer.Models;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -23,6 +24,11 @@ builder.Services
 builder.Configuration.AddJsonFile("appsettings.json", optional: false);
 builder.Configuration.AddJsonFile("appsettings.Development.json", optional: true);
 
+// Register HttpClient for Jira API calls
+builder.Services.AddHttpClient();
+
+// Register Jira configuration
+builder.Services.Configure<JiraConfig>(builder.Configuration.GetSection("Jira"));
 
 var app = builder.Build();
 
