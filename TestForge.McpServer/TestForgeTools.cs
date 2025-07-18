@@ -27,7 +27,7 @@ public static class TestForgeTools
     /// <param name="username">Username for Jira authentication (optional)</param>
     /// <param name="apiToken">API token for Jira authentication (optional)</param>
     /// <returns>Comprehensive JSON analysis including UI components, business logic, complexity scoring, and LLM guidance</returns>
-    [McpServerTool, Description("Analyzes a Jira ticket and returns structured data optimized for LLM enhancement. Provides comprehensive analysis of UI components, business logic, integration points, and baseline test cases with confidence scores.")]
+    [McpServerTool, Description("PRIMARY analysis tool for Jira API workflows. Requires authentication. Use this AFTER setting up Jira credentials. Extracts comprehensive structured data optimized for LLM enhancement including UI components, business logic, and complexity scoring. Use results to guide subsequent tool calls.")]
     public static string AnalyzeJiraTicketForLLM(
         string ticketId,
         string jiraBaseUrl = "",
@@ -97,7 +97,7 @@ public static class TestForgeTools
     /// </summary>
     /// <param name="jiraXml">The raw Jira XML content to analyze</param>
     /// <returns>Comprehensive JSON analysis including UI components, business logic, complexity scoring, and LLM guidance</returns>
-    [McpServerTool, Description("Analyzes raw Jira XML and returns structured data optimized for LLM enhancement. Provides comprehensive analysis of UI components, business logic, integration points, and baseline test cases with confidence scores.")]
+    [McpServerTool, Description("PRIMARY analysis tool for XML workflows. Call this AFTER XML validation/cleaning. Extracts comprehensive structured data optimized for LLM enhancement including UI components, business logic, and complexity scoring. Use results to guide subsequent tool calls.")]
     public static string AnalyzeJiraXmlForLLM(string jiraXml)
         => JiraXmlAnalysisService.AnalyzeForLLM(jiraXml);
 
@@ -108,7 +108,7 @@ public static class TestForgeTools
     /// <param name="priority">Priority level (High, Medium, Low, Critical)</param>
     /// <param name="component">Component or area (UI, API, Database, Integration, etc.)</param>
     /// <returns>Structured test case templates with metadata for LLM enhancement</returns>
-    [McpServerTool, Description("Generates baseline test case templates that LLM can enhance and expand. Provides structured templates for different scenarios with metadata and guidance for intelligent expansion.")]
+    [McpServerTool, Description("Generate baseline test case templates using ticket type and priority from analyze_jira_xml_for_llm results. Provides structured templates for LLM enhancement. Call AFTER primary analysis to create foundation test cases.")]
     public static string GenerateTestCaseTemplates(
         string ticketType,
         string priority = "Medium",
@@ -120,7 +120,7 @@ public static class TestForgeTools
     /// </summary>
     /// <param name="description">The ticket description or requirements text</param>
     /// <returns>Structured analysis of UI components with complexity scoring and test recommendations</returns>
-    [McpServerTool, Description("Extracts and categorizes UI components from ticket descriptions. Identifies forms, buttons, modals, navigation elements, and provides complexity scoring with test area recommendations.")]
+    [McpServerTool, Description("Use description text from analyze_jira_xml_for_llm to extract UI-specific insights. Identifies forms, buttons, modals, navigation elements with complexity scoring. Call AFTER primary analysis for UI-heavy tickets.")]
     public static string ExtractUIComponentsAnalysis(string description)
         => UiComponentAnalysisService.ExtractComponents(description);
 
@@ -129,7 +129,7 @@ public static class TestForgeTools
     /// </summary>
     /// <param name="description">The ticket description or requirements text</param>
     /// <returns>Structured analysis of business logic with confidence scores and test scenario suggestions</returns>
-    [McpServerTool, Description("Identifies business rules and validation logic from ticket descriptions. Extracts validation rules, business constraints, and provides test scenario recommendations with confidence scoring.")]
+    [McpServerTool, Description("Use description text from analyze_jira_xml_for_llm to extract business rules and validation logic. Identifies constraints, rules, and validation requirements. Call AFTER primary analysis for logic-heavy tickets.")]
     public static string ExtractBusinessLogicAnalysis(string description)
         => BusinessLogicAnalysisService.ExtractLogic(description);
 
@@ -147,7 +147,7 @@ public static class TestForgeTools
     /// </summary>
     /// <param name="jiraXml">The Jira XML content to validate</param>
     /// <returns>Detailed validation results and diagnostic information</returns>
-    [McpServerTool, Description("Validates Jira XML structure and provides detailed diagnostic information about parsing issues.")]
+    [McpServerTool, Description("ALWAYS call this FIRST when user provides raw Jira XML. Validates XML structure and provides detailed diagnostic information. If validation fails, call clean_jira_xml before proceeding with analysis.")]
     public static string ValidateJiraXml(string jiraXml)
         => JiraXmlValidationService.Validate(jiraXml);
 
@@ -156,7 +156,16 @@ public static class TestForgeTools
     /// </summary>
     /// <param name="rawXml">The raw Jira XML content to clean</param>
     /// <returns>Cleaned XML with processing information</returns>
-    [McpServerTool, Description("Cleans raw Jira XML exports to fix common formatting issues, missing closing tags, and malformed content. Use this before parsing if you encounter XML errors.")]
+    [McpServerTool, Description("Call this ONLY when validate_jira_xml fails. Fixes common issues in raw Jira XML exports including missing closing tags, malformed HTML, and duplicate attributes. Essential preprocessing step for raw Jira exports.")]
     public static string CleanJiraXml(string rawXml)
         => JiraXmlCleaningService.Clean(rawXml);
+
+    /// <summary>
+    /// Complete end-to-end workflow for processing Jira XML and generating comprehensive test cases
+    /// </summary>
+    /// <param name="jiraXml">The raw Jira XML content to process</param>
+    /// <returns>Complete workflow results with all analysis steps and TestRail-ready test cases</returns>
+    [McpServerTool, Description("COMPLETE END-TO-END WORKFLOW: Validates, cleans, analyzes Jira XML and generates comprehensive TestRail-ready test cases in one call. Use this when user wants full analysis without manual orchestration. Handles all XML issues automatically and provides complete structured output.")]
+    public static string ProcessJiraWorkflow(string jiraXml)
+        => JiraWorkflowService.ProcessComplete(jiraXml);
 }

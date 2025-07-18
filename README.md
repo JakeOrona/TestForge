@@ -4,7 +4,7 @@ A comprehensive AI-powered test case generation platform built with .NET and Ang
 
 ## Project Structure
 
-- **TestForge.McpServer** - Model Context Protocol server with 9 specialized tools for intelligent test case generation
+- **TestForge.McpServer** - Model Context Protocol server with 10 specialized tools for intelligent test case generation
 - **guidance/** - Documentation and instruction files
 - **Documentation files** - Various .md files for setup, debugging, and enhancement guides
 
@@ -16,9 +16,9 @@ A comprehensive AI-powered test case generation platform built with .NET and Ang
 - 🛠️ **Advanced XML Processing** - Robust parsing with automatic error recovery
 - 🎯 **Claude Desktop Integration** - Full MCP integration with debugging tools
 - 📋 **Enhanced Flow Support** - User → LLM → MCP Tools → Enhanced Test Cases
-- 🔧 Model Context Protocol (MCP) server with 9 specialized tools
+- 🔧 Model Context Protocol (MCP) server with 10 specialized tools
 
-3. **All 9 tools are available**:
+3. **All 10 tools are available**:
 
 ### 🛠️ Enhanced XML Cleaning Capabilities
 
@@ -82,14 +82,21 @@ This platform enables intelligent test case generation through structured LLM co
    - `extract_ui_components_analysis` - For UI-specific insights
    - `extract_business_logic_analysis` - For business rule extraction
 5. **Template generation:** `generate_test_case_templates` - Create baseline templates
+6. **Complete workflow:** `process_jira_workflow` - Single call for full automation
 
 **When user provides ticket ID (future):**
 1. **Primary analysis:** `analyze_jira_ticket_for_llm` - Requires authentication
 2. **Additional analysis:** Same as above using extracted data
 
+**For complete automation:**
+- **Use:** `process_jira_workflow` - Handles entire workflow automatically
+- **Benefits:** Validates, cleans, analyzes, and generates test cases in one call
+- **Error recovery:** Automatic XML cleaning and comprehensive error handling
+
 **Best Practices:**
 - Always validate XML first to provide better user experience
 - Use `analyze_jira_xml_for_llm` as the primary tool for XML workflows
+- Use `process_jira_workflow` for complete automation without manual orchestration
 - Combine results from multiple tools for comprehensive analysis
 - Check confidence scores to guide testing priorities
 
