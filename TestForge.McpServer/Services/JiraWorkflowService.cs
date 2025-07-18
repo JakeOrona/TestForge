@@ -33,8 +33,8 @@ public static class JiraWorkflowService
             // Step 4: Extract metadata from analysis for subsequent steps
             var metadata = ExtractMetadata(analysisStep.Result);
 
-            // Step 5-8: Process remaining steps
-            ProcessRemainingSteps(workflowResult, metadata);
+            // Step 5-8: Process remaining steps (pass cleaned XML for test case generation)
+            ProcessRemainingSteps(workflowResult, metadata, processedXml);
 
             // Create workflow summary
             workflowResult.Summary = CreateWorkflowSummary(workflowResult.Steps, metadata);
@@ -89,12 +89,29 @@ public static class JiraWorkflowService
                 var cleaningJson = JsonSerializer.Deserialize<JsonElement>(cleaningResult);
                 if (cleaningJson.TryGetProperty("cleanedXml", out var cleanedXmlElement))
                 {
-                    return cleanedXmlElement.GetString() ?? originalXml;
+                    var cleanedXml = cleanedXmlElement.GetString();
+                    if (!string.IsNullOrWhiteSpace(cleanedXml))
+                    {
+                        // Validate the cleaned XML is actually parseable
+                        try
+                        {
+                            var doc = new System.Xml.XmlDocument();
+                            doc.LoadXml(cleanedXml);
+                            return cleanedXml;
+                        }
+                        catch (Exception ex)
+                        {
+                            // If cleaned XML still fails, log the error and use original
+                            cleaningStep.ErrorMessage = $"Cleaned XML validation failed: {ex.Message}";
+                            return originalXml;
+                        }
+                    }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // If extraction fails, use original XML
+                // If extraction fails, log the error and use original XML
+                cleaningStep.ErrorMessage = $"Failed to extract cleaned XML: {ex.Message}";
             }
         }
 
@@ -122,7 +139,8 @@ public static class JiraWorkflowService
     /// </summary>
     /// <param name="workflowResult">The workflow result to update</param>
     /// <param name="metadata">Extracted metadata for processing</param>
-    private static void ProcessRemainingSteps(WorkflowResult workflowResult, WorkflowMetadata metadata)
+    /// <param name="processedXml">The processed (cleaned) XML content for test case generation</param>
+    private static void ProcessRemainingSteps(WorkflowResult workflowResult, WorkflowMetadata metadata, string processedXml)
     {
         // Step 5: Generate test case templates
         var templatesResult = TestCaseTemplateService.GenerateTemplates(metadata.TicketType, metadata.Priority, metadata.Component);
@@ -151,14 +169,28 @@ public static class JiraWorkflowService
             Timestamp = DateTime.UtcNow
         });
 
-        // Step 8: Generate final TestRail test cases
-        var testCasesResult = TestRailGenerationService.GenerateFromXml(workflowResult.Steps["analysis"].Result);
-        workflowResult.Steps.Add("test_cases", new WorkflowStep
+        // Step 8: Generate final TestRail test cases using the cleaned XML
+        try
         {
-            Result = testCasesResult,
-            Status = "completed",
-            Timestamp = DateTime.UtcNow
-        });
+            var testCasesResult = TestRailGenerationService.GenerateFromXml(processedXml);
+            workflowResult.Steps.Add("test_cases", new WorkflowStep
+            {
+                Result = testCasesResult,
+                Status = "completed",
+                Timestamp = DateTime.UtcNow
+            });
+        }
+        catch (Exception ex)
+        {
+            // If XML parsing fails, provide a graceful fallback
+            workflowResult.Steps.Add("test_cases", new WorkflowStep
+            {
+                Result = $"XML Parsing Error: {ex.Message}. Consider using the analysis results from previous steps to manually generate test cases.",
+                Status = "completed",
+                Timestamp = DateTime.UtcNow,
+                ErrorMessage = ex.Message
+            });
+        }
     }
 
     /// <summary>

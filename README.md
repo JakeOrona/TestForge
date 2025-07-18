@@ -220,12 +220,51 @@ npx mcp-remote --help
 1. Start the MCP server: `ASPNETCORE_URLS="http://localhost:5001" dotnet run`
 2. Test manually: `npx mcp-remote http://localhost:5001/mcp`
 3. Restart Claude Desktop
-4. Verify all 8 tools are available in Claude Desktop
+4. Verify all 10 tools are available in Claude Desktop
 
 **Debugging**: 
 - See `CLAUDE-DESKTOP-DEBUG-PROMPT.md` for comprehensive debugging steps
 - Use `validate_jira_xml` tool for XML diagnostics
 - Check logs: `~/Library/Logs/Claude/mcp-server-testforge-mcp-server.log`
+
+### 🤖 ChatGPT Custom GPT Integration
+
+**Quick Setup**:
+```bash
+# Run the setup script
+./setup-chatgpt-integration.sh
+
+# Start the server
+cd TestForge.McpServer
+ASPNETCORE_URLS="http://localhost:5001" dotnet run
+```
+
+**Configuration Files**:
+- `CHATGPT-CUSTOM-GPT-INSTRUCTIONS.md` - Complete instruction set for Custom GPT
+- `CHATGPT-OPENAPI-SCHEMA.md` - OpenAPI schema for Actions configuration
+
+**Custom GPT Setup**:
+1. Create a new Custom GPT in ChatGPT
+2. Copy instructions from `CHATGPT-CUSTOM-GPT-INSTRUCTIONS.md`
+3. Import OpenAPI schema from `CHATGPT-OPENAPI-SCHEMA.md` 
+4. Set server URL to `http://localhost:5001` (or ngrok URL for company access)
+5. Test with sample Jira XML
+
+**For Company-Wide Access**:
+```bash
+# Expose server publicly with ngrok
+ngrok http 5001
+
+# Update OpenAPI schema with ngrok URL
+# Share Custom GPT within your organization
+```
+
+**Features**:
+- ✅ All 10 TestForge tools available via ChatGPT Actions
+- ✅ Intelligent workflow orchestration 
+- ✅ Automatic XML validation and cleaning
+- ✅ Comprehensive test case generation
+- ✅ Company-wide deployment ready
 
 
 ## Technology Stack

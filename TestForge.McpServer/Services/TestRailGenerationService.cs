@@ -19,22 +19,40 @@ public static class TestRailGenerationService
         // Input validation
         if (string.IsNullOrWhiteSpace(jiraXml))
         {
-            return "Error: Jira XML content is required.";
+            return JsonSerializer.Serialize(new { 
+                error = "Error: Jira XML content is required.",
+                suggestion = "Ensure XML content is passed from the cleaning step."
+            });
         }
 
         try
         {
+            // Pre-validation: Check if XML is well-formed
+            if (!IsValidXml(jiraXml))
+            {
+                return JsonSerializer.Serialize(new { 
+                    error = "XML validation failed: XML is not well-formed.",
+                    suggestion = "Check the XML cleaning step output for malformed content."
+                });
+            }
+
             // Parse and validate XML
             var parseResult = JiraStoryParsingService.ParseJiraXml(jiraXml);
             
             if (!parseResult.IsSuccess)
             {
-                return $"XML Parsing Error: {parseResult.ErrorMessage}";
+                return JsonSerializer.Serialize(new { 
+                    error = $"XML Parsing Error: {parseResult.ErrorMessage}",
+                    suggestion = "XML content may need additional cleaning or contains unsupported elements."
+                });
             }
 
             if (parseResult.Story == null)
             {
-                return "Error: No story data found in XML.";
+                return JsonSerializer.Serialize(new { 
+                    error = "Error: No story data found in XML.",
+                    suggestion = "Verify the XML contains valid Jira story elements."
+                });
             }
 
             // Generate TestRail test cases from extracted story data
@@ -42,14 +60,40 @@ public static class TestRailGenerationService
 
             if (!testRailResult.IsSuccess)
             {
-                return $"TestRail Generation Error: {testRailResult.ErrorMessage}";
+                return JsonSerializer.Serialize(new { 
+                    error = $"TestRail Generation Error: {testRailResult.ErrorMessage}",
+                    suggestion = "Review the parsed story data for completeness."
+                });
             }
 
             return testRailResult.FormattedOutput;
         }
         catch (Exception ex)
         {
-            return $"Error processing Jira XML: {ex.Message}";
+            return JsonSerializer.Serialize(new { 
+                error = $"Error processing Jira XML: {ex.Message}",
+                suggestion = "Check XML format and ensure it contains valid Jira story elements.",
+                details = ex.StackTrace
+            });
+        }
+    }
+
+    /// <summary>
+    /// Validates if XML string is well-formed
+    /// </summary>
+    /// <param name="xml">XML string to validate</param>
+    /// <returns>True if XML is well-formed, false otherwise</returns>
+    private static bool IsValidXml(string xml)
+    {
+        try
+        {
+            var doc = new System.Xml.XmlDocument();
+            doc.LoadXml(xml);
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 
