@@ -8,18 +8,6 @@ using System.ComponentModel;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure Kestrel to listen on all network interfaces
-builder.WebHost.ConfigureKestrel(options =>
-{
-    // Listen on all IPs with HTTP on port 5000
-    options.ListenAnyIP(5000);
-    // Listen on all IPs with HTTPS on port 5001
-    options.ListenAnyIP(5001, listenOptions =>
-    {
-        listenOptions.UseHttps();
-    });
-});
-
 builder.Logging.AddConsole(consoleLogOptions =>
 {
     consoleLogOptions.LogToStandardErrorThreshold = LogLevel.Trace;

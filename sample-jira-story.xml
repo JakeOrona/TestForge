@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="0.92">
+  <channel>
+    <title>Jira Story Export</title>
+    <item>
+      <title>[PROJ-123] Implement user authentication system</title>
+      <key>PROJ-123</key>
+      <summary>Implement user authentication system</summary>
+      <type>Story</type>
+      <priority>High</priority>
+      <status>To Do</status>
+      <assignee>john.doe@company.com</assignee>
+      <reporter>jane.smith@company.com</reporter>
+      <created>2024-01-15T10:30:00.000Z</created>
+      <updated>2024-01-16T14:20:00.000Z</updated>
+      <description>
+        As a system administrator, I want to implement a secure user authentication system so that users can safely access the application with proper credentials.
+
+        Acceptance Criteria:
+        1. Users should be able to register with email and password
+        2. Users should be able to login with their credentials
+        3. Password should be encrypted and stored securely
+        4. Session management should be implemented
+        5. Failed login attempts should be logged
+        6. Password reset functionality should be available
+
+        Technical Requirements:
+        - Use JWT tokens for session management
+        - Implement rate limiting for login attempts
+        - Use bcrypt for password hashing
+        - Add two-factor authentication support
+      </description>
+      <component>Authentication</component>
+      <component>Security</component>
+      <labels>backend,security,authentication</labels>
+      <environment>Development</environment>
+      <duedate>2024-02-15</duedate>
+      <timeestimate>20h</timeestimate>
+      <timeoriginalestimate>20h</timeoriginalestimate>
+    </item>
+  </channel>
+</rss>
