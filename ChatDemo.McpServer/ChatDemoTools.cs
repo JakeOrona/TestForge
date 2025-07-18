@@ -577,47 +577,60 @@ public static class ChatDemoTools
         // Step 1: Fix missing closing tags for comments section
         rawXml = FixMissingCommentClosingTags(rawXml);
         
-        // Step 2: Clean malformed comment content
+        // Step 2: Fix duplicate attributes BEFORE processing comments content
+        rawXml = FixDuplicateAttributes(rawXml);
+        
+        // Step 3: Clean malformed comment content
         rawXml = CleanCommentContent(rawXml);
         
-        // Step 3: Fix duplicate attributes (existing functionality)
-        rawXml = Regex.Replace(rawXml, 
-            @"rel=""[^""]*""\s+([^>]*?)rel=""([^""]*?)""", 
-            @"rel=""$2"" $1", 
-            RegexOptions.IgnoreCase);
-        
-        // Step 4: Fix other duplicate attributes
-        rawXml = Regex.Replace(rawXml, 
-            @"class=""[^""]*""\s+([^>]*?)class=""([^""]*?)""", 
-            @"class=""$2"" $1", 
-            RegexOptions.IgnoreCase);
-        
-        rawXml = Regex.Replace(rawXml, 
-            @"data-account-id=""[^""]*""\s+([^>]*?)data-account-id=""([^""]*?)""", 
-            @"data-account-id=""$2"" $1", 
-            RegexOptions.IgnoreCase);
-        
-        rawXml = Regex.Replace(rawXml, 
-            @"accountid=""[^""]*""\s+([^>]*?)accountid=""([^""]*?)""", 
-            @"accountid=""$2"" $1", 
-            RegexOptions.IgnoreCase);
-        
-        // Step 5: Fix malformed HTML entities
+        // Step 4: Fix malformed HTML entities
         rawXml = Regex.Replace(rawXml, @"&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)", "&amp;");
         
-        // Step 6: Remove invalid XML characters
+        // Step 5: Remove invalid XML characters
         rawXml = Regex.Replace(rawXml, @"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", "");
         
-        // Step 7: Remove empty CDATA sections
+        // Step 6: Remove empty CDATA sections
         rawXml = Regex.Replace(rawXml, 
             @"<!\[CDATA\[\s*\]\]>", 
             "", 
             RegexOptions.IgnoreCase);
         
-        // Step 8: Fix nested XML structure issues
+        // Step 7: Fix nested XML structure issues
         rawXml = FixNestedXmlStructure(rawXml);
         
         return rawXml;
+    }
+
+    /// <summary>
+    /// Fixes duplicate attributes in XML elements
+    /// </summary>
+    private static string FixDuplicateAttributes(string xml)
+    {
+        // Fix duplicate rel attributes
+        xml = Regex.Replace(xml, 
+            @"rel=""[^""]*""\s+([^>]*?)rel=""([^""]*?)""", 
+            @"rel=""$2"" $1", 
+            RegexOptions.IgnoreCase);
+        
+        // Fix duplicate class attributes
+        xml = Regex.Replace(xml, 
+            @"class=""[^""]*""\s+([^>]*?)class=""([^""]*?)""", 
+            @"class=""$2"" $1", 
+            RegexOptions.IgnoreCase);
+        
+        // Fix duplicate data-account-id attributes
+        xml = Regex.Replace(xml, 
+            @"data-account-id=""[^""]*""\s+([^>]*?)data-account-id=""([^""]*?)""", 
+            @"data-account-id=""$2"" $1", 
+            RegexOptions.IgnoreCase);
+        
+        // Fix duplicate accountid attributes
+        xml = Regex.Replace(xml, 
+            @"accountid=""[^""]*""\s+([^>]*?)accountid=""([^""]*?)""", 
+            @"accountid=""$2"" $1", 
+            RegexOptions.IgnoreCase);
+        
+        return xml;
     }
 
     /// <summary>
@@ -625,49 +638,87 @@ public static class ChatDemoTools
     /// </summary>
     private static string FixMissingCommentClosingTags(string xml)
     {
-        // Pattern to find <comments> without proper closing
-        var commentsPattern = @"<comments[^>]*>(?:(?!<\/comments>)[\s\S])*?(?=<\/\w+>|$)";
+        // Only fix if comments section is missing its closing tag
+        // Pattern to find <comments> that runs until another major element or end of document
+        var unclosedCommentsPattern = @"<comments[^>]*>((?:(?!<\/comments>)[\s\S])*?)(?=<\/item>|<issuelinks>|<attachments>|<subtasks>|<customfields>|</channel>|$)";
         
-        var matches = Regex.Matches(xml, commentsPattern, RegexOptions.IgnoreCase);
+        // First check if there's actually a comments section missing closing tag
+        var hasUnclosedComments = Regex.IsMatch(xml, unclosedCommentsPattern, RegexOptions.IgnoreCase);
         
-        foreach (Match match in matches)
+        if (hasUnclosedComments)
         {
-            var commentsSection = match.Value;
-            
-            // Check if it already has closing tag
-            if (!commentsSection.Contains("</comments>"))
+            xml = Regex.Replace(xml, unclosedCommentsPattern, match =>
             {
-                // Add missing closing tag
-                var replacement = commentsSection + "</comments>";
-                xml = xml.Replace(commentsSection, replacement);
-            }
+                var commentsContent = match.Groups[1].Value;
+                return $"<comments>{commentsContent}</comments>";
+            }, RegexOptions.IgnoreCase);
         }
         
         return xml;
     }
 
     /// <summary>
-    /// Cleans malformed content within comment tags
+    /// Cleans malformed content within the entire comments section
     /// </summary>
     private static string CleanCommentContent(string xml)
     {
-        // Pattern to find comment tags with content
-        var commentPattern = @"<comment[^>]*>(.*?)</comment>";
+        // Find the entire comments section using a more robust pattern
+        // Handle both empty and non-empty comments sections
+        var commentsPattern = @"<comments[^>]*>(.*?)</comments>";
         
-        return Regex.Replace(xml, commentPattern, match =>
+        return Regex.Replace(xml, commentsPattern, match =>
         {
-            var commentTag = match.Groups[0].Value;
-            var content = match.Groups[1].Value;
+            var commentsContent = match.Groups[1].Value;
             
-            // Wrap content in CDATA if it contains HTML or special characters
-            if (ContainsHtmlOrSpecialChars(content))
+            // Always wrap complex comments content in CDATA for safety
+            if (!string.IsNullOrWhiteSpace(commentsContent))
             {
-                var cleanContent = $"<![CDATA[{content}]]>";
-                return commentTag.Replace(content, cleanContent);
+                // Clean the content before wrapping in CDATA
+                var cleanedContent = CleanCommentsContentForCdata(commentsContent);
+                return $"<comments><![CDATA[{cleanedContent}]]></comments>";
             }
             
-            return commentTag;
+            // Return empty comments section as is
+            return "<comments></comments>";
         }, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+    }
+
+    /// <summary>
+    /// Cleans content specifically for CDATA wrapping to prevent nested CDATA issues
+    /// </summary>
+    private static string CleanCommentsContentForCdata(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+            return content;
+        
+        // Remove existing CDATA sections to prevent nesting
+        content = Regex.Replace(content, @"<!\[CDATA\[(.*?)\]\]>", "$1", RegexOptions.Singleline);
+        
+        // Handle the ]]> sequence that would break CDATA - this is critical
+        // Replace any ]]> with ]]&gt; to prevent CDATA termination
+        content = content.Replace("]]>", "]]&gt;");
+        
+        // Also handle other potentially problematic sequences
+        content = content.Replace("]]", "]]");  // Keep as is, it's only ]]> that's problematic
+        
+        // Clean up any remaining XML escaping since we're putting it in CDATA
+        // But be careful with HTML entities that make sense in HTML context
+        content = content.Replace("&amp;", "&");
+        content = content.Replace("&lt;", "<");
+        content = content.Replace("&gt;", ">");
+        content = content.Replace("&quot;", "\"");
+        content = content.Replace("&apos;", "'");
+        
+        // Handle problematic Unicode characters that might break XML parsing
+        content = Regex.Replace(content, @"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", "");
+        
+        // Ensure line breaks are preserved properly
+        content = content.Replace("\r\n", "\n").Replace("\r", "\n");
+        
+        // Make sure there are no unescaped control characters
+        content = Regex.Replace(content, @"[\uE000-\uF8FF]", ""); // Private use area
+        
+        return content;
     }
 
     /// <summary>
@@ -675,11 +726,14 @@ public static class ChatDemoTools
     /// </summary>
     private static string FixNestedXmlStructure(string xml)
     {
-        // Fix unclosed comments tags that might interfere with parsing
-        xml = Regex.Replace(xml, @"<comments>\s*(?!<comment|</comments>)", "<comments>", RegexOptions.IgnoreCase);
+        // Remove any duplicate consecutive closing tags for comments
+        xml = Regex.Replace(xml, @"<\/comments>\s*<\/comments>", "</comments>", RegexOptions.IgnoreCase);
         
-        // If we find </item> without a preceding </comments>, add it
-        xml = Regex.Replace(xml, @"(?<!<\/comments>)\s*<\/item>", "</comments></item>", RegexOptions.IgnoreCase);
+        // Remove any orphaned closing tags that might be left over
+        xml = Regex.Replace(xml, @"<\/comment>\s*<\/comments>\s*<\/item>", "</comments></item>", RegexOptions.IgnoreCase);
+        
+        // Clean up any malformed comments structure that might remain
+        xml = Regex.Replace(xml, @"<comments>\s*(?=<\/comments>)", "<comments>", RegexOptions.IgnoreCase);
         
         return xml;
     }
@@ -696,12 +750,20 @@ public static class ChatDemoTools
         if (Regex.IsMatch(content, @"<[^>]+>"))
             return true;
         
-        // Check for special XML characters
+        // Check for special XML characters that would break parsing
         if (content.Contains("&") || content.Contains("<") || content.Contains(">"))
             return true;
         
-        // Check for user mentions and links
+        // Check for user mentions and links that often contain special characters
         if (content.Contains("@") || content.Contains("http"))
+            return true;
+        
+        // Check for XML structure elements that would break parsing
+        if (content.Contains("</") || content.Contains("/>"))
+            return true;
+        
+        // Check for quotes that might contain unescaped content
+        if (content.Contains("\"") || content.Contains("'"))
             return true;
         
         return false;
