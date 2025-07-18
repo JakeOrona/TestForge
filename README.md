@@ -4,45 +4,21 @@ A comprehensive AI-powered test case generation platform built with .NET and Ang
 
 ## Project Structure
 
-- **ChatDemo.Api** - ASP.NET Core Web API (configured for future API endpoints)
-- **ChatDemo.Client** - Angular frontend with chat interface
-- **ChatDemo.McpServer** - Model Context Protocol server with demo tools
+- **ChatDemo.McpServer** - Model Context Protocol server with 13 specialized tools for intelligent test case generation
+- **guidance/** - Documentation and instruction files
+- **Documentation files** - Various .md files for setup, debugging, and enhancement guides
 
 ## Features
 
-- 🤖 Interactive chat interface built with Angular
-- 🧠 **LLM-Enhanced Analysis** - Structured data extraction optimized for AI enhancement
+-  **LLM-Enhanced Analysis** - Structured data extraction optimized for AI enhancement
 - 🔧 **Intelligent Test Case Generation** - AI-powered TestRail test case creation from Jira tickets
 - 📊 **Complexity Scoring** - Automated complexity analysis with confidence metrics
 - 🛠️ **Advanced XML Processing** - Robust parsing with automatic error recovery
 - 🎯 **Claude Desktop Integration** - Full MCP integration with debugging tools
 - 📋 **Enhanced Flow Support** - User → LLM → MCP Tools → Enhanced Test Cases
-- ⚡ Real-time chat with ChatGPT client
-- 🔧 Model Context Protocol (MCP) server with 13 specialized tools
-- 🎯 CORS-enabled API ready for integration
+- 🔧 Model Context Protocol (MCP) server with 8 specialized tools
 
-## MCP Tools Available
-
-The MCP server provides **13 specialized tools** for intelligent test case generation:
-
-### 🎯 Core Demo Tools
-1. **SayHello** - Personalized greeting with optional name parameter
-2. **GetAppInfo** - Information about the ChatDemo application
-3. **Echo** - Echoes messages back to the client
-4. **ReverseText** - Reverses any provided text
-5. **GetCurrentTime** - Returns current date and time
-6. **GenerateRandomNumber** - Generates random number between specified ranges
-
-### 🧠 LLM-Enhanced Analysis Tools
-7. **AnalyzeJiraTicketForLLM** - Analyzes Jira tickets and returns structured data optimized for LLM enhancement with complexity scoring and test area recommendations
-8. **GenerateTestCaseTemplates** - Creates baseline test case templates that LLMs can enhance and expand with metadata and guidance
-9. **ExtractUIComponentsAnalysis** - Identifies UI elements and interactions from ticket descriptions with confidence scoring
-10. **ExtractBusinessLogicAnalysis** - Extracts business rules and validation logic with test scenario recommendations
-
-### 🔧 Advanced XML Processing Tools
-11. **ValidateJiraXml** - Validates XML structure and provides detailed diagnostic information about parsing issues
-12. **CleanJiraXml** - Cleans raw Jira XML exports to fix common formatting issues and structural problems
-13. **GenerateTestCasesFromJiraXml** - Parses Jira story XML and generates TestRail-compatible test cases with enhanced error handling
+3. **All 8 tools are available**:
 
 ### 🛠️ Enhanced XML Cleaning Capabilities
 
@@ -87,29 +63,13 @@ This platform enables intelligent test case generation through structured LLM co
 ### Prerequisites
 
 - .NET 8.0 SDK or higher
-- Node.js 18+ and npm
-- Angular CLI (`npm install -g @angular/cli`)
 
-### Running the Application
+### Running the MCP Server
 
-1. **Start the Angular Client:**
+1. **Start the MCP Server:**
    ```bash
-   cd ChatDemo.Client
-   ng serve
-   ```
-   Navigate to `http://localhost:4200`
-
-2. **Run the API (Optional):**
-   ```bash
-   cd ChatDemo.Api
-   dotnet run
-   ```
-
-3. **Test the MCP Server:**
-   ```bash
-   cd /MCP-POC/MCP-demo/ChatDemo.McpServer
-   # Run on different port to avoid conflict with Angular
-   ASPNETCORE_URLS="http://0.0.0.0:5001" dotnet run
+   cd ChatDemo.McpServer
+   ASPNETCORE_URLS="http://localhost:5001" dotnet run
    ```
 
 ### Testing the MCP Server
@@ -210,7 +170,7 @@ npx mcp-remote --help
 1. Start the MCP server: `ASPNETCORE_URLS="http://localhost:5001" dotnet run`
 2. Test manually: `npx mcp-remote http://localhost:5001/mcp`
 3. Restart Claude Desktop
-4. Verify all 13 tools are available in Claude Desktop
+4. Verify all 8 tools are available in Claude Desktop
 
 **Debugging**: 
 - See `CLAUDE-DESKTOP-DEBUG-PROMPT.md` for comprehensive debugging steps
@@ -232,13 +192,12 @@ npx mcp-remote --help
 ### Building the Solution
 
 ```bash
-# Build entire solution
+# Build the MCP server
 dotnet build
 
-# Build and test Angular app
-cd ChatDemo.Client
-ng build
-ng test
+# Run the MCP server
+cd ChatDemo.McpServer
+ASPNETCORE_URLS="http://localhost:5001" dotnet run
 ```
 
 ### 🔧 Troubleshooting XML Issues
