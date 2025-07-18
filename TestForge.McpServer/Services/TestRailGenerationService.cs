@@ -124,7 +124,7 @@ public static class TestRailGenerationService
             testCases.AddRange(edgeTestCases);
 
             // Format output
-            var formattedOutput = TestRailFormattingService.FormatTestRailOutput(testCases, story);
+            var formattedOutput = TestRailFormattingService.FormatTestRailOutputStatic(testCases, story);
 
             return new TestRailGenerationResult
             {
