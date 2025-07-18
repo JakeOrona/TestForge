@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using System.Xml;
@@ -67,6 +68,7 @@ public static class JiraStoryParsingService
                 Priority = ExtractFieldValue(issueElement, "priority", "prio"),
                 IssueType = ExtractFieldValue(issueElement, "type", "issuetype", "issue-type"),
                 AcceptanceCriteria = ExtractAcceptanceCriteria(issueElement),
+                Comments = ExtractComments(issueElement),
                 CustomFields = ExtractCustomFields(issueElement)
             };
 
@@ -273,5 +275,103 @@ public static class JiraStoryParsingService
         rawXml = Regex.Replace(rawXml, @"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", "");
         
         return rawXml;
+    }
+
+    /// <summary>
+    /// Extracts comments from the Jira XML comments section
+    /// </summary>
+    /// <param name="element">The XML element containing comments</param>
+    /// <returns>List of parsed comments</returns>
+    private static List<JiraComment> ExtractComments(XElement element)
+    {
+        var comments = new List<JiraComment>();
+        
+        var commentsElement = element.Element("comments") ?? element.Descendants("comments").FirstOrDefault();
+        if (commentsElement == null) return comments;
+        
+        foreach (var commentElement in commentsElement.Elements("comment"))
+        {
+            var comment = new JiraComment
+            {
+                Id = commentElement.Attribute("id")?.Value ?? string.Empty,
+                Author = ExtractAuthorName(commentElement.Attribute("author")?.Value ?? string.Empty),
+                AuthorId = commentElement.Attribute("author")?.Value ?? string.Empty,
+                Created = ParseCommentDate(commentElement.Attribute("created")?.Value ?? string.Empty),
+                Content = commentElement.Value,
+                CleanContent = CleanHtmlFromComment(commentElement.Value)
+            };
+            
+            comments.Add(comment);
+        }
+        
+        return comments.OrderBy(c => c.Created).ToList();
+    }
+
+    /// <summary>
+    /// Cleans HTML content from comments while preserving meaningful text
+    /// </summary>
+    /// <param name="htmlContent">Raw HTML comment content</param>
+    /// <returns>Clean text content</returns>
+    private static string CleanHtmlFromComment(string htmlContent)
+    {
+        if (string.IsNullOrWhiteSpace(htmlContent)) return string.Empty;
+        
+        // Remove HTML tags but preserve structure
+        var cleanContent = Regex.Replace(htmlContent, @"<[^>]+>", " ");
+        
+        // Decode HTML entities
+        cleanContent = System.Net.WebUtility.HtmlDecode(cleanContent);
+        
+        // Normalize whitespace
+        cleanContent = Regex.Replace(cleanContent, @"\s+", " ");
+        
+        return cleanContent.Trim();
+    }
+
+    /// <summary>
+    /// Extracts author display name from user links or accountId
+    /// </summary>
+    /// <param name="authorInfo">Author information from XML</param>
+    /// <returns>Display name or accountId</returns>
+    private static string ExtractAuthorName(string authorInfo)
+    {
+        if (string.IsNullOrWhiteSpace(authorInfo)) return "Unknown Author";
+        
+        // Extract from accountId format (557058:d005829d-f994-4adf-ac20-54fa72b78108)
+        if (authorInfo.Contains(":"))
+        {
+            return authorInfo.Split(':').LastOrDefault() ?? authorInfo;
+        }
+        
+        return authorInfo;
+    }
+
+    /// <summary>
+    /// Parses comment creation date from various formats
+    /// </summary>
+    /// <param name="dateString">Date string from XML</param>
+    /// <returns>Parsed DateTime or MinValue if parsing fails</returns>
+    private static DateTime ParseCommentDate(string dateString)
+    {
+        if (string.IsNullOrWhiteSpace(dateString)) return DateTime.MinValue;
+        
+        // Try multiple date formats commonly used in Jira exports
+        var formats = new[]
+        {
+            "ddd, dd MMM yyyy HH:mm:ss zzz",  // Mon, 30 Jun 2025 16:46:04 -0500
+            "yyyy-MM-ddTHH:mm:ss.fffZ",       // ISO format
+            "yyyy-MM-dd HH:mm:ss",            // Simple format
+        };
+        
+        foreach (var format in formats)
+        {
+            if (DateTime.TryParseExact(dateString, format, CultureInfo.InvariantCulture, DateTimeStyles.None, out var result))
+            {
+                return result;
+            }
+        }
+        
+        // Fallback to general parsing
+        return DateTime.TryParse(dateString, out var fallbackResult) ? fallbackResult : DateTime.MinValue;
     }
 }

@@ -12,7 +12,21 @@ public record JiraStory
     public string Priority { get; init; } = string.Empty;
     public string IssueType { get; init; } = string.Empty;
     public List<string> AcceptanceCriteria { get; init; } = new();
+    public List<JiraComment> Comments { get; init; } = new();
     public Dictionary<string, string> CustomFields { get; init; } = new();
+}
+
+/// <summary>
+/// Represents a Jira comment with metadata
+/// </summary>
+public record JiraComment
+{
+    public string Id { get; init; } = string.Empty;
+    public string Author { get; init; } = string.Empty;
+    public string AuthorId { get; init; } = string.Empty;
+    public DateTime Created { get; init; } = DateTime.MinValue;
+    public string Content { get; init; } = string.Empty;
+    public string CleanContent { get; init; } = string.Empty;
 }
 
 /// <summary>

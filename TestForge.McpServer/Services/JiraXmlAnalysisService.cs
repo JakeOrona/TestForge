@@ -82,7 +82,18 @@ public static class JiraXmlAnalysisService
                     priority = story.Priority,
                     storyPoints = story.StoryPoints,
                     status = story.CustomFields.GetValueOrDefault("status", "Unknown"),
-                    acceptanceCriteria = story.AcceptanceCriteria
+                    acceptanceCriteria = story.AcceptanceCriteria,
+                    commentsSummary = new
+                    {
+                        totalComments = story.Comments.Count,
+                        hasComments = story.Comments.Any(),
+                        recentActivity = story.Comments.Count > 0 ? story.Comments.OrderByDescending(c => c.Created).Take(3).Select(c => new
+                        {
+                            author = c.Author,
+                            date = c.Created,
+                            preview = c.CleanContent.Length > 50 ? c.CleanContent.Substring(0, 50) + "..." : c.CleanContent
+                        }).ToArray() : null
+                    }
                 },
                 complexityAnalysis = new
                 {
@@ -101,6 +112,7 @@ public static class JiraXmlAnalysisService
                     performance = IdentifyPerformanceTestAreas(description)
                 },
                 baselineTestCases = GenerateBaselineTestCases(story),
+                commentsAnalysis = AnalyzeComments(story.Comments),
                 llmGuidance = new
                 {
                     focusAreas = DetermineFocusAreas(story, complexityScore),
@@ -118,6 +130,7 @@ public static class JiraXmlAnalysisService
                     {
                         hasDescription = !string.IsNullOrEmpty(story.Description),
                         hasAcceptanceCriteria = story.AcceptanceCriteria.Any(),
+                        hasComments = story.Comments.Any(),
                         customFieldsCount = story.CustomFields.Count
                     }
                 }
@@ -518,5 +531,123 @@ public static class JiraXmlAnalysisService
             confidence += 0.1;
             
         return Math.Round(confidence, 2);
+    }
+
+    /// <summary>
+    /// Analyzes comments for additional context and insights
+    /// </summary>
+    /// <param name="comments">List of Jira comments</param>
+    /// <returns>Comment analysis object</returns>
+    private static object AnalyzeComments(List<JiraComment> comments)
+    {
+        if (!comments.Any()) return new { hasComments = false, summary = "No comments found" };
+        
+        var recentComments = comments.Where(c => c.Created > DateTime.Now.AddDays(-30)).ToList();
+        var uniqueAuthors = comments.Select(c => c.Author).Distinct().ToList();
+        
+        // Extract key insights from comments
+        var keyInsights = ExtractCommentInsights(comments);
+        var stakeholderConcerns = ExtractStakeholderConcerns(comments);
+        var clarifications = ExtractClarifications(comments);
+        
+        return new
+        {
+            hasComments = true,
+            totalComments = comments.Count,
+            recentComments = recentComments.Count,
+            uniqueAuthors = uniqueAuthors.Count,
+            dateRange = new
+            {
+                earliest = comments.Min(c => c.Created),
+                latest = comments.Max(c => c.Created)
+            },
+            keyInsights = keyInsights,
+            stakeholderConcerns = stakeholderConcerns,
+            clarifications = clarifications,
+            recentActivity = recentComments.Take(5).Select(c => new
+            {
+                author = c.Author,
+                date = c.Created,
+                content = c.CleanContent.Length > 100 ? c.CleanContent.Substring(0, 100) + "..." : c.CleanContent
+            }).ToArray()
+        };
+    }
+
+    /// <summary>
+    /// Extracts key insights from comment text
+    /// </summary>
+    /// <param name="comments">List of comments to analyze</param>
+    /// <returns>Array of key insights</returns>
+    private static string[] ExtractCommentInsights(List<JiraComment> comments)
+    {
+        var insights = new List<string>();
+        var allText = string.Join(" ", comments.Select(c => c.CleanContent.ToLower()));
+        
+        // Look for common patterns in comments
+        if (allText.Contains("requirement") || allText.Contains("spec"))
+            insights.Add("Requirements clarification discussed");
+        
+        if (allText.Contains("ui") || allText.Contains("interface") || allText.Contains("design"))
+            insights.Add("UI/UX considerations mentioned");
+        
+        if (allText.Contains("performance") || allText.Contains("speed") || allText.Contains("slow"))
+            insights.Add("Performance concerns raised");
+        
+        if (allText.Contains("security") || allText.Contains("auth") || allText.Contains("permission"))
+            insights.Add("Security aspects discussed");
+        
+        if (allText.Contains("integration") || allText.Contains("api") || allText.Contains("service"))
+            insights.Add("Integration points identified");
+        
+        if (allText.Contains("test") || allText.Contains("qa") || allText.Contains("verify"))
+            insights.Add("Testing considerations mentioned");
+        
+        return insights.ToArray();
+    }
+
+    /// <summary>
+    /// Extracts stakeholder concerns from comments
+    /// </summary>
+    /// <param name="comments">List of comments to analyze</param>
+    /// <returns>Array of stakeholder concerns</returns>
+    private static string[] ExtractStakeholderConcerns(List<JiraComment> comments)
+    {
+        var concerns = new List<string>();
+        
+        foreach (var comment in comments)
+        {
+            var content = comment.CleanContent.ToLower();
+            
+            if (content.Contains("concern") || content.Contains("worry") || content.Contains("issue"))
+                concerns.Add($"{comment.Author}: {comment.CleanContent.Substring(0, Math.Min(100, comment.CleanContent.Length))}...");
+            
+            if (content.Contains("should") || content.Contains("must") || content.Contains("need"))
+                concerns.Add($"{comment.Author}: {comment.CleanContent.Substring(0, Math.Min(100, comment.CleanContent.Length))}...");
+        }
+        
+        return concerns.Take(5).ToArray();
+    }
+
+    /// <summary>
+    /// Extracts clarifications and decisions from comments
+    /// </summary>
+    /// <param name="comments">List of comments to analyze</param>
+    /// <returns>Array of clarifications</returns>
+    private static string[] ExtractClarifications(List<JiraComment> comments)
+    {
+        var clarifications = new List<string>();
+        
+        foreach (var comment in comments)
+        {
+            var content = comment.CleanContent.ToLower();
+            
+            if (content.Contains("clarification") || content.Contains("decision") || content.Contains("agreed"))
+                clarifications.Add($"{comment.Author}: {comment.CleanContent.Substring(0, Math.Min(100, comment.CleanContent.Length))}...");
+            
+            if (content.Contains("let's") || content.Contains("we should") || content.Contains("decided"))
+                clarifications.Add($"{comment.Author}: {comment.CleanContent.Substring(0, Math.Min(100, comment.CleanContent.Length))}...");
+        }
+        
+        return clarifications.Take(5).ToArray();
     }
 }
