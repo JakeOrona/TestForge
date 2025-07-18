@@ -4,7 +4,7 @@ A comprehensive AI-powered test case generation platform built with .NET and Ang
 
 ## Project Structure
 
-- **TestForge.McpServer** - Model Context Protocol server with 13 specialized tools for intelligent test case generation
+- **TestForge.McpServer** - Model Context Protocol server with 9 specialized tools for intelligent test case generation
 - **guidance/** - Documentation and instruction files
 - **Documentation files** - Various .md files for setup, debugging, and enhancement guides
 
@@ -16,9 +16,9 @@ A comprehensive AI-powered test case generation platform built with .NET and Ang
 - 🛠️ **Advanced XML Processing** - Robust parsing with automatic error recovery
 - 🎯 **Claude Desktop Integration** - Full MCP integration with debugging tools
 - 📋 **Enhanced Flow Support** - User → LLM → MCP Tools → Enhanced Test Cases
-- 🔧 Model Context Protocol (MCP) server with 8 specialized tools
+- 🔧 Model Context Protocol (MCP) server with 9 specialized tools
 
-3. **All 8 tools are available**:
+3. **All 9 tools are available**:
 
 ### 🛠️ Enhanced XML Cleaning Capabilities
 
@@ -39,11 +39,24 @@ The XML processing tools include comprehensive cleaning to handle common issues 
 This platform enables intelligent test case generation through structured LLM collaboration:
 
 ### Flow Architecture
-1. **User** provides raw Jira XML or ticket ID
+
+**Current Raw XML Flow (Primary)**:
+1. **User** provides raw Jira XML
+2. **LLM** calls MCP tools in sequence:
+   - `validate_jira_xml` - Validate XML structure (optional diagnostic)
+   - `clean_jira_xml` - Fix XML issues if validation fails
+   - `analyze_jira_xml_for_llm` - Extract structured data from XML
+   - `generate_test_case_templates` - Create baseline templates
+   - `extract_ui_components_analysis` - Analyze UI elements from description
+   - `extract_business_logic_analysis` - Extract business rules from description
+3. **MCP Tools** provide clean, structured JSON data optimized for AI consumption
+4. **LLM** synthesizes insights and generates comprehensive test cases
+5. **Enhanced Test Cases** - Intelligent, prioritized test scenarios ready for TestRail
+
+**Future Jira API Flow**:
+1. **User** provides Jira ticket ID
 2. **LLM** calls MCP tools for structured analysis:
-   - `validate_jira_xml` - Diagnose XML issues
-   - `clean_jira_xml` - Fix common problems
-   - `analyze_jira_ticket_for_llm` - Extract structured data
+   - `analyze_jira_ticket_for_llm` - Extract structured data via API (requires auth)
    - `generate_test_case_templates` - Create baseline templates
    - `extract_ui_components_analysis` - Identify UI elements
    - `extract_business_logic_analysis` - Extract business rules
@@ -52,11 +65,33 @@ This platform enables intelligent test case generation through structured LLM co
 5. **Enhanced Test Cases** - Intelligent, prioritized test scenarios ready for TestRail
 
 ### Benefits
+- **XML-First Workflow** - No authentication required for initial development
 - **Structured Analysis** - Consistent, JSON-formatted data for LLM processing
 - **Complexity-Aware** - Prioritizes testing efforts based on complexity analysis
 - **Confidence Scoring** - Provides transparency in analysis quality
 - **Automatic Recovery** - Handles malformed XML without manual intervention
 - **Comprehensive Coverage** - Multi-faceted analysis ensures thorough testing
+
+### LLM Guidance for Tool Selection
+
+**When user provides raw Jira XML:**
+1. **Always start with:** `validate_jira_xml` - Check XML structure
+2. **If validation fails:** `clean_jira_xml` - Fix XML issues
+3. **Primary analysis:** `analyze_jira_xml_for_llm` - Extract comprehensive structured data
+4. **Additional analysis:** Use description from Step 3 to call:
+   - `extract_ui_components_analysis` - For UI-specific insights
+   - `extract_business_logic_analysis` - For business rule extraction
+5. **Template generation:** `generate_test_case_templates` - Create baseline templates
+
+**When user provides ticket ID (future):**
+1. **Primary analysis:** `analyze_jira_ticket_for_llm` - Requires authentication
+2. **Additional analysis:** Same as above using extracted data
+
+**Best Practices:**
+- Always validate XML first to provide better user experience
+- Use `analyze_jira_xml_for_llm` as the primary tool for XML workflows
+- Combine results from multiple tools for comprehensive analysis
+- Check confidence scores to guide testing priorities
 
 ## Getting Started
 
@@ -105,8 +140,11 @@ http POST localhost:5001/mcp Content-Type:application/json jsonrpc=2.0 id:=3 met
 # Test the Jira XML parser
 http POST localhost:5001/mcp Content-Type:application/json jsonrpc=2.0 id:=4 method=tools/call params:='{"name": "generate_test_cases_from_jira_xml", "arguments": {"jiraXml": "<item><key>TEST-456</key><summary>User Registration Feature</summary><description>As a new user, I want to register an account so that I can access the application features.</description><type>Story</type><priority>Medium</priority><acceptance-criteria>Given I am on the registration page\nWhen I fill out the registration form with valid information\nThen I should receive a confirmation email\nAnd I should be able to log in with my new credentials</acceptance-criteria></item>"}}'
 
+# Test the new XML analysis tool for LLM workflows
+http POST localhost:5001/mcp Content-Type:application/json jsonrpc=2.0 id:=5 method=tools/call params:='{"name": "analyze_jira_xml_for_llm", "arguments": {"jiraXml": "<item><key>TEST-456</key><summary>User Registration Feature</summary><description>As a new user, I want to register an account so that I can access the application features.</description><type>Story</type><priority>Medium</priority><acceptance-criteria>Given I am on the registration page\nWhen I fill out the registration form with valid information\nThen I should receive a confirmation email\nAnd I should be able to log in with my new credentials</acceptance-criteria></item>"}}'
+
 # Test with raw Jira XML export (with duplicate attributes and HTML content)
-http POST localhost:5001/mcp Content-Type:application/json jsonrpc=2.0 id:=5 method=tools/call params:='{"name": "generate_test_cases_from_jira_xml", "arguments": {"jiraXml": "<item><key>DEV-15860</key><summary>[Rates] - Minimum input should be empty when the override rate does not have a minimum set</summary><description><p><b>Steps to reproduce</b>:</p> <ul> <li>Navigate to the Account Viewer → Rates Tab → Account SubTab</li> <li>Select a rate that has a <b>minimum</b> value and that also has <b>override</b> the rate. Click on that row.</li> </ul> <p><b>Actual result:</b></p> <p>When the rate has a minimum and the override rate does not have a minimum set, the override rate minimum input is being filled with the Rate minimum instead of being empty</p> <p><b>Expected Result:</b></p> <p>When the rate has a minimum and the override rate does not have a minimum, the minimum input is empty and has a placeholder showing \"Use here goes rate minimum value\".</p></description><type>Defect</type><priority>Medium</priority><status>Ready For Testing</status></item>"}}'
+http POST localhost:5001/mcp Content-Type:application/json jsonrpc=2.0 id:=6 method=tools/call params:='{"name": "generate_test_cases_from_jira_xml", "arguments": {"jiraXml": "<item><key>DEV-15860</key><summary>[Rates] - Minimum input should be empty when the override rate does not have a minimum set</summary><description><p><b>Steps to reproduce</b>:</p> <ul> <li>Navigate to the Account Viewer → Rates Tab → Account SubTab</li> <li>Select a rate that has a <b>minimum</b> value and that also has <b>override</b> the rate. Click on that row.</li> </ul> <p><b>Actual result:</b></p> <p>When the rate has a minimum and the override rate does not have a minimum set, the override rate minimum input is being filled with the Rate minimum instead of being empty</p> <p><b>Expected Result:</b></p> <p>When the rate has a minimum and the override rate does not have a minimum, the minimum input is empty and has a placeholder showing \"Use here goes rate minimum value\".</p></description><type>Defect</type><priority>Medium</priority><status>Ready For Testing</status></item>"}}'
 ```
 
 **Option 2: Using curl**
@@ -130,6 +168,11 @@ curl -X POST http://localhost:5001/mcp \
 curl -X POST http://localhost:5001/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "generate_test_cases_from_jira_xml", "arguments": {"jiraXml": "<item><key>PROJ-123</key><summary>User Login Feature</summary><description>As a user, I want to log in to the application so that I can access my account.</description><type>Story</type><priority>High</priority><acceptance-criteria>Given I am on the login page, When I enter valid credentials, Then I should be logged in successfully</acceptance-criteria></item>"}}}'
+
+# Test the new XML analysis tool for LLM workflows
+curl -X POST http://localhost:5001/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "analyze_jira_xml_for_llm", "arguments": {"jiraXml": "<item><key>PROJ-123</key><summary>User Login Feature</summary><description>As a user, I want to log in to the application so that I can access my account.</description><type>Story</type><priority>High</priority><acceptance-criteria>Given I am on the login page, When I enter valid credentials, Then I should be logged in successfully</acceptance-criteria></item>"}}}'
 ```
 
 **Note**: The MCP Inspector (`npx @modelcontextprotocol/inspector`) is designed for STDIO-based MCP servers, not HTTP-based servers like this .NET implementation.
