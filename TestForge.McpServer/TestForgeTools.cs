@@ -43,10 +43,10 @@ public static class TestForgeTools
     /// <returns>Comprehensive JSON analysis including UI components, business logic, complexity scoring, and LLM guidance</returns>
     [McpServerTool, Description("PRIMARY analysis tool for Jira API workflows. Requires authentication. Use this AFTER setting up Jira credentials. Extracts comprehensive structured data optimized for LLM enhancement including UI components, business logic, and complexity scoring. Use results to guide subsequent tool calls.")]
     public static string AnalyzeJiraTicketForLLM(
-        string ticketId,
-        string jiraBaseUrl = "",
-        string username = "",
-        string apiToken = "")
+        [Description("Jira ticket ID (e.g., DEV-15860)")] string ticketId,
+        [Description("Jira base URL (optional, uses config if not provided)")] string jiraBaseUrl = "",
+        [Description("Username for Jira authentication (optional)")] string username = "",
+        [Description("API token for Jira authentication (optional)")] string apiToken = "")
     {
         try
         {
@@ -112,7 +112,7 @@ public static class TestForgeTools
     /// <param name="jiraXml">The raw Jira XML content to analyze</param>
     /// <returns>Comprehensive JSON analysis including UI components, business logic, complexity scoring, and LLM guidance</returns>
     [McpServerTool, Description("PRIMARY analysis tool for XML workflows. Call this AFTER XML validation/cleaning. Extracts comprehensive structured data optimized for LLM enhancement including UI components, business logic, and complexity scoring. Use results to guide subsequent tool calls.")]
-    public static string AnalyzeJiraXmlForLLM(string jiraXml)
+    public static string AnalyzeJiraXmlForLLM([Description("Raw Jira XML content to analyze")] string jiraXml)
         => JiraXmlAnalysisService.AnalyzeForLLM(jiraXml);
 
     /// <summary>
@@ -124,9 +124,9 @@ public static class TestForgeTools
     /// <returns>Structured test case templates with metadata for LLM enhancement</returns>
     [McpServerTool, Description("Generate baseline test case templates using ticket type and priority from analyze_jira_xml_for_llm results. Provides structured templates for LLM enhancement. Call AFTER primary analysis to create foundation test cases.")]
     public static string GenerateTestCaseTemplates(
-        string ticketType,
-        string priority = "Medium",
-        string component = "UI")
+        [Description("Type of ticket (Story, Bug, Epic, Task, etc.)")] string ticketType,
+        [Description("Priority level (High, Medium, Low, Critical)")] string priority = "Medium",
+        [Description("Component or area (UI, API, Database, Integration, etc.)")] string component = "UI")
         => TestCaseTemplateService.GenerateTemplates(ticketType, priority, component);
 
     /// <summary>
@@ -135,7 +135,7 @@ public static class TestForgeTools
     /// <param name="description">The ticket description or requirements text</param>
     /// <returns>Structured analysis of UI components with complexity scoring and test recommendations</returns>
     [McpServerTool, Description("Use description text from analyze_jira_xml_for_llm to extract UI-specific insights. Identifies forms, buttons, modals, navigation elements with complexity scoring. Call AFTER primary analysis for UI-heavy tickets.")]
-    public static string ExtractUIComponentsAnalysis(string description)
+    public static string ExtractUIComponentsAnalysis([Description("Ticket description or requirements text for UI analysis")] string description)
         => UiComponentAnalysisService.ExtractComponents(description);
 
     /// <summary>
@@ -144,7 +144,7 @@ public static class TestForgeTools
     /// <param name="description">The ticket description or requirements text</param>
     /// <returns>Structured analysis of business logic with confidence scores and test scenario suggestions</returns>
     [McpServerTool, Description("Use description text from analyze_jira_xml_for_llm to extract business rules and validation logic. Identifies constraints, rules, and validation requirements. Call AFTER primary analysis for logic-heavy tickets.")]
-    public static string ExtractBusinessLogicAnalysis(string description)
+    public static string ExtractBusinessLogicAnalysis([Description("Ticket description or requirements text for business logic extraction")] string description)
         => BusinessLogicAnalysisService.ExtractLogic(description);
 
     /// <summary>
@@ -153,7 +153,7 @@ public static class TestForgeTools
     /// <param name="jiraXml">The Jira ticket XML content to parse</param>
     /// <returns>TestRail-formatted test cases with detailed steps and expected results</returns>
     [McpServerTool, Description("Parses Jira story ticket XML and generates TestRail-compatible test cases with proper structure, steps, and metadata.")]
-    public static string GenerateTestCasesFromJiraXml(string jiraXml)
+    public static string GenerateTestCasesFromJiraXml([Description("Jira ticket XML content to parse")] string jiraXml)
         => TestRailGenerationService.GenerateFromXml(jiraXml);
 
     /// <summary>
@@ -162,7 +162,7 @@ public static class TestForgeTools
     /// <param name="jiraXml">The Jira XML content to validate</param>
     /// <returns>Detailed validation results and diagnostic information</returns>
     [McpServerTool, Description("ALWAYS call this FIRST when user provides raw Jira XML. Validates XML structure and provides detailed diagnostic information. If validation fails, call clean_jira_xml before proceeding with analysis.")]
-    public static string ValidateJiraXml(string jiraXml)
+    public static string ValidateJiraXml([Description("Jira XML content to validate")] string jiraXml)
         => JiraXmlValidationService.Validate(jiraXml);
 
     /// <summary>
@@ -171,7 +171,7 @@ public static class TestForgeTools
     /// <param name="rawXml">The raw Jira XML content to clean</param>
     /// <returns>Cleaned XML with processing information</returns>
     [McpServerTool, Description("Call this ONLY when validate_jira_xml fails. Fixes common issues in raw Jira XML exports including missing closing tags, malformed HTML, and duplicate attributes. Essential preprocessing step for raw Jira exports.")]
-    public static string CleanJiraXml(string rawXml)
+    public static string CleanJiraXml([Description("Raw malformed XML content to clean")] string rawXml)
         => JiraXmlCleaningService.Clean(rawXml);
 
     /// <summary>
@@ -180,7 +180,7 @@ public static class TestForgeTools
     /// <param name="jiraXml">The raw Jira XML content to process</param>
     /// <returns>Complete workflow results with all analysis steps and TestRail-ready test cases</returns>
     [McpServerTool, Description("COMPLETE END-TO-END WORKFLOW: Validates, cleans, analyzes Jira XML and generates comprehensive TestRail-ready test cases in one call. Use this when user wants full analysis without manual orchestration. Handles all XML issues automatically and provides complete structured output.")]
-    public static string ProcessJiraWorkflow(string jiraXml)
+    public static string ProcessJiraWorkflow([Description("Raw Jira XML content for complete workflow")] string jiraXml)
         => JiraWorkflowService.ProcessComplete(jiraXml);
 
     /// <summary>
@@ -192,12 +192,33 @@ public static class TestForgeTools
     /// <returns>Enhanced test suite with comprehensive coverage</returns>
     [McpServerTool, Description("COMPREHENSIVE TEST ENHANCEMENT: Enhances initial test cases using LLM analysis for maximum coverage including negative, security, accessibility, performance, and boundary testing. Generates 10+ test categories with intelligent deduplication and TestRail-compatible output.")]
     public static async Task<string> EnhanceTestCasesWithLLM(
-        string parsedXmlData,
-        string initialTests,
-        string enhancementConfig = "")
+        [Description("Parsed Jira XML data as JSON string")] string parsedXmlData,
+        [Description("Initial generated test cases as JSON string")] string initialTests,
+        [Description("Enhancement configuration specifying test categories")] string enhancementConfig = "")
     {
         try
         {
+            // Add explicit parameter validation
+            if (string.IsNullOrWhiteSpace(parsedXmlData))
+            {
+                return JsonSerializer.Serialize(new { 
+                    error = "Missing required parameter: parsedXmlData",
+                    method = nameof(EnhanceTestCasesWithLLM),
+                    timestamp = DateTime.UtcNow,
+                    details = "The parsedXmlData parameter is required and cannot be null or empty"
+                });
+            }
+
+            if (string.IsNullOrWhiteSpace(initialTests))
+            {
+                return JsonSerializer.Serialize(new { 
+                    error = "Missing required parameter: initialTests",
+                    method = nameof(EnhanceTestCasesWithLLM),
+                    timestamp = DateTime.UtcNow,
+                    details = "The initialTests parameter is required and cannot be null or empty"
+                });
+            }
+
             if (_llmEnhancementService == null || _testRailFormattingService == null)
             {
                 return JsonSerializer.Serialize(new { 
@@ -205,7 +226,8 @@ public static class TestForgeTools
                 });
             }
 
-            _logger?.LogInformation("Starting LLM-enhanced test case generation");
+            _logger?.LogInformation("Starting LLM-enhanced test case generation with data length: {DataLength}, tests length: {TestsLength}", 
+                parsedXmlData.Length, initialTests.Length);
 
             // Parse input parameters
             var parsedData = JsonSerializer.Deserialize<ParsedJiraData>(parsedXmlData);
@@ -264,16 +286,29 @@ public static class TestForgeTools
     /// <param name="parsedXmlData">Parsed Jira XML data as JSON string</param>
     /// <returns>Comprehensive test matrix with coverage analysis</returns>
     [McpServerTool, Description("COMPREHENSIVE TEST MATRIX: Generates a complete test matrix showing all possible test scenarios, coverage areas, and potential gaps. Use this to analyze test coverage potential before generating actual test cases.")]
-    public static async Task<string> GenerateComprehensiveTestMatrix(string parsedXmlData)
+    public static async Task<string> GenerateComprehensiveTestMatrix([Description("Parsed Jira XML data as JSON string")] string parsedXmlData)
     {
         try
         {
+            // Add explicit parameter validation
+            if (string.IsNullOrWhiteSpace(parsedXmlData))
+            {
+                return JsonSerializer.Serialize(new { 
+                    error = "Missing required parameter: parsedXmlData",
+                    method = nameof(GenerateComprehensiveTestMatrix),
+                    timestamp = DateTime.UtcNow,
+                    details = "The parsedXmlData parameter is required and cannot be null or empty"
+                });
+            }
+
             if (_llmEnhancementService == null)
             {
                 return JsonSerializer.Serialize(new { 
                     error = "LLM enhancement service not initialized. Please ensure proper dependency injection setup." 
                 });
             }
+
+            _logger?.LogInformation("Starting comprehensive test matrix generation with data length: {DataLength}", parsedXmlData.Length);
 
             var parsedData = JsonSerializer.Deserialize<ParsedJiraData>(parsedXmlData);
             if (parsedData == null)
@@ -304,11 +339,22 @@ public static class TestForgeTools
     /// <returns>Complete test suite with comprehensive coverage</returns>
     [McpServerTool, Description("AUTOMATED COMPREHENSIVE TESTING: Processes Jira XML and automatically generates comprehensive test cases with maximum coverage across all categories. Combines validation, cleaning, analysis, and enhancement in a single workflow.")]
     public static async Task<string> GenerateComprehensiveTestSuite(
-        string jiraXml,
-        string enhancementConfig = "")
+        [Description("Raw Jira XML content")] string jiraXml,
+        [Description("Enhancement configuration JSON")] string enhancementConfig = "")
     {
         try
         {
+            // Add explicit parameter validation
+            if (string.IsNullOrWhiteSpace(jiraXml))
+            {
+                return JsonSerializer.Serialize(new { 
+                    error = "Missing required parameter: jiraXml",
+                    method = nameof(GenerateComprehensiveTestSuite),
+                    timestamp = DateTime.UtcNow,
+                    details = "The jiraXml parameter is required and cannot be null or empty"
+                });
+            }
+
             if (_llmEnhancementService == null || _testRailFormattingService == null)
             {
                 return JsonSerializer.Serialize(new { 
@@ -316,7 +362,7 @@ public static class TestForgeTools
                 });
             }
 
-            _logger?.LogInformation("Starting comprehensive test suite generation");
+            _logger?.LogInformation("Starting comprehensive test suite generation with jiraXml length: {XmlLength}", jiraXml.Length);
 
             // Step 1: Process Jira XML to get structured data
             var analysisResult = AnalyzeJiraXmlForLLM(jiraXml);

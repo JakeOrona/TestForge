@@ -8,17 +8,30 @@ A comprehensive AI-powered test case generation platform built with .NET and Ang
 - **guidance/** - Documentation and instruction files
 - **Documentation files** - Various .md files for setup, debugging, and enhancement guides
 
-## Features
+## Enhanced Features
 
--  **LLM-Enhanced Analysis** - Structured data extraction optimized for AI enhancement
-- 🔧 **Intelligent Test Case Generation** - AI-powered TestRail test case creation from Jira tickets
-- 📊 **Complexity Scoring** - Automated complexity analysis with confidence metrics
-- 🛠️ **Advanced XML Processing** - Robust parsing with automatic error recovery
+- 🧠 **Semantic Test Generation** - Intelligent categorization across 14 test categories with keyword mapping
+- 🔄 **Multi-Context Scenario Expansion** - Automatic test variants for IVR flows, user roles, environments
+- �️ **Technical Artifact Processing** - Extract SQL, JSON, HTML, and configuration data for targeted testing
+- 🌳 **Conditional Logic Analysis** - Decision tree extraction and comprehensive branch coverage
+- ⚡ **Performance Test Generation** - Domain-specific performance testing based on content analysis
+- 🎯 **Comprehensive Coverage Analysis** - 80%+ coverage across all testing dimensions
+- � **Advanced XML Processing** - Robust parsing with HtmlAgilityPack and automatic error recovery
+- 📊 **Enhanced Complexity Scoring** - AI-powered risk assessment and confidence metrics
 - 🎯 **Claude Desktop Integration** - Full MCP integration with debugging tools
-- 📋 **Enhanced Flow Support** - User → LLM → MCP Tools → Enhanced Test Cases
-- 🔧 Model Context Protocol (MCP) server with 10 specialized tools
+- 📋 **Enhanced Flow Support** - User → LLM → MCP Tools → Intelligent Test Suites
+- 🔧 Model Context Protocol (MCP) server with 14 specialized enhanced tools
 
-3. **All 10 tools are available**:
+### 🚀 **New Enhanced Capabilities**
+
+- **Semantic Keyword Mapping**: Audio/TTS → Performance tests, Data formats → Validation tests
+- **IVR Context Expansion**: Automatic variants for no-pin, athena, and availity IVR systems  
+- **Technical Content Parsing**: HTML within XML descriptions with HtmlAgilityPack
+- **Business Logic Extraction**: Pattern-based conditional logic and fallback path analysis
+- **Performance Triggers**: Domain-aware performance test generation (latency, load, stress)
+- **Comprehensive Test Matrix**: 14-category coverage analysis with gap identification
+
+### **All 14 enhanced tools are available**:
 
 ### 🛠️ Enhanced XML Cleaning Capabilities
 
@@ -34,71 +47,77 @@ The XML processing tools include comprehensive cleaning to handle common issues 
 
 **Result**: You can copy-paste raw Jira XML exports directly without manual cleanup!
 
-## 🚀 Enhanced Flow: User → LLM → MCP Tools → Enhanced Test Cases
+## 🚀 Enhanced Flow: User → LLM → MCP Tools → Intelligent Test Suites
 
-This platform enables intelligent test case generation through structured LLM collaboration:
+This platform enables sophisticated test case generation through semantic analysis and AI collaboration:
 
-### Flow Architecture
+### Enhanced Flow Architecture
 
-**Current Raw XML Flow (Primary)**:
-1. **User** provides raw Jira XML
-2. **LLM** calls MCP tools in sequence:
-   - `validate_jira_xml` - Validate XML structure (optional diagnostic)
-   - `clean_jira_xml` - Fix XML issues if validation fails
-   - `analyze_jira_xml_for_llm` - Extract structured data from XML
-   - `generate_test_case_templates` - Create baseline templates
-   - `extract_ui_components_analysis` - Analyze UI elements from description
-   - `extract_business_logic_analysis` - Extract business rules from description
-3. **MCP Tools** provide clean, structured JSON data optimized for AI consumption
-4. **LLM** synthesizes insights and generates comprehensive test cases
-5. **Enhanced Test Cases** - Intelligent, prioritized test scenarios ready for TestRail
+**Primary Enhanced XML Flow**:
+1. **User** provides raw Jira XML with complex HTML descriptions
+2. **LLM** calls enhanced MCP tools in intelligent sequence:
+   - `generate_comprehensive_test_suite` - Complete semantic analysis and test generation ⭐ **RECOMMENDED**
+   - `validate_jira_xml` - XML structure validation (diagnostic)
+   - `clean_jira_xml` - Advanced XML repair with HtmlAgilityPack
+   - `analyze_jira_xml_for_llm` - Enhanced structured data extraction
+   - `extract_business_logic_analysis` - Conditional logic and decision tree analysis
+   - `extract_ui_components_analysis` - UI element identification with complexity scoring
+   - `generate_comprehensive_test_matrix` - Coverage analysis across 14 categories
+3. **Enhanced MCP Tools** provide intelligent JSON data with semantic categorization
+4. **LLM** synthesizes insights across 14 test categories with confidence scoring
+5. **Intelligent Test Suites** - 20-50 comprehensive, contextually-aware test cases ready for TestRail
 
-**Future Jira API Flow**:
+**Future Enhanced Jira API Flow**:
 1. **User** provides Jira ticket ID
-2. **LLM** calls MCP tools for structured analysis:
-   - `analyze_jira_ticket_for_llm` - Extract structured data via API (requires auth)
-   - `generate_test_case_templates` - Create baseline templates
-   - `extract_ui_components_analysis` - Identify UI elements
-   - `extract_business_logic_analysis` - Extract business rules
-3. **MCP Tools** provide clean, structured JSON data optimized for AI consumption
-4. **LLM** synthesizes insights and generates comprehensive test cases
-5. **Enhanced Test Cases** - Intelligent, prioritized test scenarios ready for TestRail
+2. **LLM** calls enhanced MCP tools for comprehensive analysis:
+   - `analyze_jira_ticket_for_llm` - Enhanced API-based extraction (requires auth)
+   - Plus all specialized analysis tools for complete coverage
+3. **Enhanced Processing** with semantic mapping and multi-context expansion
+4. **Intelligent Test Generation** across all 14 categories
+5. **Comprehensive Test Suites** - Maximum coverage with intelligent prioritization
 
-### Benefits
-- **XML-First Workflow** - No authentication required for initial development
-- **Structured Analysis** - Consistent, JSON-formatted data for LLM processing
-- **Complexity-Aware** - Prioritizes testing efforts based on complexity analysis
-- **Confidence Scoring** - Provides transparency in analysis quality
-- **Automatic Recovery** - Handles malformed XML without manual intervention
-- **Comprehensive Coverage** - Multi-faceted analysis ensures thorough testing
+### Enhanced Benefits
+- **Semantic Intelligence** - Automatic test categorization based on content analysis
+- **Multi-Context Awareness** - IVR variants, user roles, environment-specific testing
+- **Technical Artifact Processing** - SQL, JSON, HTML extraction for targeted testing
+- **Conditional Logic Analysis** - Decision tree and fallback path coverage
+- **Performance Optimization** - Domain-specific performance test generation
+- **80%+ Coverage** - Comprehensive testing across all dimensions
+- **Enhanced Recovery** - Advanced XML processing with HtmlAgilityPack
+- **Confidence Transparency** - Clear quality metrics for test prioritization
 
-### LLM Guidance for Tool Selection
+### Enhanced LLM Guidance for Tool Selection
 
 **When user provides raw Jira XML:**
-1. **Always start with:** `validate_jira_xml` - Check XML structure
-2. **If validation fails:** `clean_jira_xml` - Fix XML issues
-3. **Primary analysis:** `analyze_jira_xml_for_llm` - Extract comprehensive structured data
-4. **Additional analysis:** Use description from Step 3 to call:
-   - `extract_ui_components_analysis` - For UI-specific insights
-   - `extract_business_logic_analysis` - For business rule extraction
-5. **Template generation:** `generate_test_case_templates` - Create baseline templates
-6. **Complete workflow:** `process_jira_workflow` - Single call for full automation
+1. **Primary recommendation:** `generate_comprehensive_test_suite` - Complete semantic analysis and test generation ⭐
+2. **Alternative workflow:** Start with `validate_jira_xml` - Check XML structure and diagnostics
+3. **If validation fails:** `clean_jira_xml` - Advanced XML repair with HtmlAgilityPack
+4. **Detailed analysis:** `analyze_jira_xml_for_llm` - Comprehensive structured data extraction
+5. **Specialized analysis:** Use description from Step 4 to call:
+   - `extract_ui_components_analysis` - UI element identification with complexity scoring
+   - `extract_business_logic_analysis` - Conditional logic and decision tree analysis
+   - `generate_comprehensive_test_matrix` - Complete coverage analysis across 14 categories
+6. **Enhancement:** `enhance_test_cases_with_llm` - Add additional coverage categories
+7. **Complete automation:** `process_jira_workflow` - Single call for full workflow automation
 
 **When user provides ticket ID (future):**
-1. **Primary analysis:** `analyze_jira_ticket_for_llm` - Requires authentication
-2. **Additional analysis:** Same as above using extracted data
+1. **Primary analysis:** `analyze_jira_ticket_for_llm` - Enhanced API-based extraction (requires authentication)
+2. **Additional analysis:** Same enhanced workflow as above using extracted data
 
 **For complete automation:**
-- **Use:** `process_jira_workflow` - Handles entire workflow automatically
-- **Benefits:** Validates, cleans, analyzes, and generates test cases in one call
-- **Error recovery:** Automatic XML cleaning and comprehensive error handling
+- **Use:** `generate_comprehensive_test_suite` - Handles semantic analysis, multi-context expansion, and comprehensive test generation ⭐ **RECOMMENDED**
+- **Alternative:** `process_jira_workflow` - Handles entire workflow automatically with error recovery
+- **Benefits:** Validates, cleans, analyzes, and generates 20-50 comprehensive test cases in one call
+- **Enhanced features:** Semantic categorization, IVR context expansion, technical artifact processing
 
-**Best Practices:**
-- Always validate XML first to provide better user experience
-- Use `analyze_jira_xml_for_llm` as the primary tool for XML workflows
-- Use `process_jira_workflow` for complete automation without manual orchestration
-- Combine results from multiple tools for comprehensive analysis
-- Check confidence scores to guide testing priorities
+**Enhanced Best Practices:**
+- Always use `generate_comprehensive_test_suite` for maximum coverage and intelligence
+- Validate XML first for better user experience and diagnostics
+- Use semantic analysis results to guide additional specialized tool calls
+- Check confidence scores (>0.8 recommended) to prioritize high-quality tests
+- Leverage multi-context expansion for IVR variants and user role testing
+- Extract technical artifacts (SQL, JSON, HTML) for targeted test scenarios
+- Combine results from multiple tools for 80%+ comprehensive coverage
 
 ## Getting Started
 
