@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using System.Xml;
@@ -270,11 +271,111 @@ public static class JiraStoryParsingService
         if (string.IsNullOrWhiteSpace(rawXml))
             return rawXml;
 
-        // Basic cleaning operations
-        rawXml = Regex.Replace(rawXml, @"&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)", "&amp;");
-        rawXml = Regex.Replace(rawXml, @"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", "");
+        // Basic cleaning operations - use safe entity escaping to prevent ReDoS
+        rawXml = EscapeXmlEntitiesSafe(rawXml);
+        rawXml = RemoveInvalidXmlCharactersSafe(rawXml);
         
         return rawXml;
+    }
+
+    /// <summary>
+    /// Safely escapes XML entities without ReDoS vulnerability
+    /// Uses character-by-character validation instead of complex regex lookahead
+    /// </summary>
+    /// <param name="input">Input string to escape</param>
+    /// <returns>String with safely escaped XML entities</returns>
+    private static string EscapeXmlEntitiesSafe(string input)
+    {
+        if (string.IsNullOrEmpty(input)) return input;
+        
+        var result = new System.Text.StringBuilder(input.Length);
+        var validEntities = new HashSet<string> { "amp", "lt", "gt", "quot", "apos" };
+        
+        for (int i = 0; i < input.Length; i++)
+        {
+            if (input[i] == '&')
+            {
+                // Check if this is a valid entity
+                int semicolonIndex = input.IndexOf(';', i);
+                if (semicolonIndex > i + 1 && semicolonIndex - i <= 10) // Limit entity length to prevent abuse
+                {
+                    string entity = input.Substring(i + 1, semicolonIndex - i - 1);
+                    if (validEntities.Contains(entity) || IsValidNumericEntity(entity))
+                    {
+                        result.Append(input[i]); // Keep valid entity
+                        continue;
+                    }
+                }
+                result.Append("&amp;"); // Escape invalid &
+            }
+            else
+            {
+                result.Append(input[i]);
+            }
+        }
+        return result.ToString();
+    }
+
+    /// <summary>
+    /// Validates if a string is a valid numeric XML entity (&#123; or &#x1A;)
+    /// </summary>
+    /// <param name="entity">Entity string without & and ;</param>
+    /// <returns>True if valid numeric entity</returns>
+    private static bool IsValidNumericEntity(string entity)
+    {
+        if (string.IsNullOrEmpty(entity) || !entity.StartsWith("#"))
+            return false;
+            
+        if (entity.Length > 8) // Reasonable limit for numeric entities
+            return false;
+            
+        if (entity.Length > 1 && entity[1] == 'x')
+        {
+            // Hexadecimal entity &#xNN;
+            for (int i = 2; i < entity.Length; i++)
+            {
+                char c = entity[i];
+                if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
+                    return false;
+            }
+            return entity.Length > 2;
+        }
+        else
+        {
+            // Decimal entity &#123;
+            for (int i = 1; i < entity.Length; i++)
+            {
+                if (entity[i] < '0' || entity[i] > '9')
+                    return false;
+            }
+            return entity.Length > 1;
+        }
+    }
+
+    /// <summary>
+    /// Removes invalid XML characters safely without regex backtracking
+    /// </summary>
+    /// <param name="input">Input string to clean</param>
+    /// <returns>String with invalid XML characters removed</returns>
+    private static string RemoveInvalidXmlCharactersSafe(string input)
+    {
+        if (string.IsNullOrEmpty(input)) return input;
+        
+        var result = new System.Text.StringBuilder(input.Length);
+        
+        foreach (char c in input)
+        {
+            // Valid XML characters: #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]
+            if (c == 0x09 || c == 0x0A || c == 0x0D || 
+                (c >= 0x20 && c <= 0xD7FF) ||
+                (c >= 0xE000 && c <= 0xFFFD))
+            {
+                result.Append(c);
+            }
+            // Skip invalid characters
+        }
+        
+        return result.ToString();
     }
 
     /// <summary>
@@ -309,6 +410,7 @@ public static class JiraStoryParsingService
 
     /// <summary>
     /// Cleans HTML content from comments while preserving meaningful text
+    /// Uses safe state machine approach to prevent ReDoS attacks
     /// </summary>
     /// <param name="htmlContent">Raw HTML comment content</param>
     /// <returns>Clean text content</returns>
@@ -316,16 +418,98 @@ public static class JiraStoryParsingService
     {
         if (string.IsNullOrWhiteSpace(htmlContent)) return string.Empty;
         
-        // Remove HTML tags but preserve structure
-        var cleanContent = Regex.Replace(htmlContent, @"<[^>]+>", " ");
+        // Use safe HTML cleaning with state machine to prevent ReDoS
+        var cleanContent = RemoveHtmlTagsSafe(htmlContent);
         
-        // Decode HTML entities
+        // Decode HTML entities safely
         cleanContent = System.Net.WebUtility.HtmlDecode(cleanContent);
         
-        // Normalize whitespace
-        cleanContent = Regex.Replace(cleanContent, @"\s+", " ");
+        // Normalize whitespace safely
+        cleanContent = NormalizeWhitespaceSafe(cleanContent);
         
         return cleanContent.Trim();
+    }
+
+    /// <summary>
+    /// Removes HTML tags using a safe state machine approach instead of regex
+    /// Prevents ReDoS attacks from malformed HTML tags
+    /// </summary>
+    /// <param name="htmlContent">HTML content to clean</param>
+    /// <returns>Text content with HTML tags removed</returns>
+    private static string RemoveHtmlTagsSafe(string htmlContent)
+    {
+        if (string.IsNullOrEmpty(htmlContent)) return htmlContent;
+        
+        var result = new System.Text.StringBuilder();
+        bool insideTag = false;
+        int tagDepth = 0;
+        
+        for (int i = 0; i < htmlContent.Length; i++)
+        {
+            char c = htmlContent[i];
+            
+            if (c == '<')
+            {
+                if (!insideTag)
+                {
+                    insideTag = true;
+                    tagDepth = 1;
+                    result.Append(' '); // Replace tag start with space
+                }
+                else
+                {
+                    tagDepth++; // Handle nested < characters
+                }
+            }
+            else if (c == '>' && insideTag)
+            {
+                tagDepth--;
+                if (tagDepth <= 0)
+                {
+                    insideTag = false;
+                    tagDepth = 0;
+                }
+            }
+            else if (!insideTag)
+            {
+                result.Append(c);
+            }
+            // Skip characters inside tags
+        }
+        
+        return result.ToString();
+    }
+
+    /// <summary>
+    /// Normalizes whitespace without using regex to prevent ReDoS
+    /// </summary>
+    /// <param name="input">Input string to normalize</param>
+    /// <returns>String with normalized whitespace</returns>
+    private static string NormalizeWhitespaceSafe(string input)
+    {
+        if (string.IsNullOrEmpty(input)) return input;
+        
+        var result = new System.Text.StringBuilder();
+        bool lastWasSpace = false;
+        
+        foreach (char c in input)
+        {
+            if (char.IsWhiteSpace(c))
+            {
+                if (!lastWasSpace)
+                {
+                    result.Append(' ');
+                    lastWasSpace = true;
+                }
+            }
+            else
+            {
+                result.Append(c);
+                lastWasSpace = false;
+            }
+        }
+        
+        return result.ToString();
     }
 
     /// <summary>
