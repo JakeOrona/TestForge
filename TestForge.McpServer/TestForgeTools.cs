@@ -25,6 +25,9 @@ public static class TestForgeTools
         _llmEnhancementService = llmEnhancementService;
         _testRailFormattingService = testRailFormattingService;
         _logger = logger;
+        
+        // Initialize JiraStoryParsingService with logger for structured logging
+        JiraStoryParsingService.Initialize(logger);
     }
     /// <summary>
     /// Gets current date and time
