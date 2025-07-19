@@ -293,7 +293,33 @@ public class TestCase
     public List<string> TestData { get; set; } = new();
     public double Confidence { get; set; } = 1.0;
     public string Source { get; set; } = string.Empty;
-    public Dictionary<string, string> Metadata { get; set; } = new();
+    public Dictionary<string, object> Metadata { get; set; } = new();
+}
+
+/// <summary>
+/// Overall confidence scoring for test suites with comprehensive metrics
+/// </summary>
+public class OverallConfidenceScore
+{
+    public double OverallConfidence { get; set; }
+    public double AverageConfidence { get; set; }
+    public double MinimumConfidence { get; set; }
+    public double MaximumConfidence { get; set; }
+    public Dictionary<string, int> ConfidenceDistribution { get; set; } = new();
+    public QualityMetrics QualityMetrics { get; set; } = new();
+}
+
+/// <summary>
+/// Quality metrics for test suite assessment
+/// </summary>
+public class QualityMetrics
+{
+    public int TotalTests { get; set; }
+    public int HighConfidenceTests { get; set; }
+    public int MediumConfidenceTests { get; set; }
+    public int LowConfidenceTests { get; set; }
+    public int CategoryCoverage { get; set; }
+    public double AverageStepsPerTest { get; set; }
 }
 
 /// <summary>

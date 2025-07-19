@@ -378,7 +378,7 @@ public static class TestForgeTools
                 });
             }
 
-            // Step 2: Create initial test case from structured data (eliminates JSON parsing issue)
+            // Step 2: Create initial test case from structured data with confidence scoring
             var defaultTestCase = new TestCase
             {
                 Id = "INITIAL_001",
@@ -387,8 +387,13 @@ public static class TestForgeTools
                 Priority = parsedData?.Priority ?? "Medium",
                 Category = TestCategoryType.Functional,
                 Type = TestType.Positive,
-                Confidence = 0.8,
-                Source = "Initial Generation"
+                Confidence = CalculateInitialConfidence(parsedData),
+                Source = "Structured Analysis",
+                Metadata = new Dictionary<string, object>
+                {
+                    {"AnalysisQuality", parsedData?.ComplexityScore ?? 0.0},
+                    {"DataCompleteness", CalculateDataCompleteness(parsedData)}
+                }
             };
             var initialTests = new List<TestCase> { defaultTestCase };
 
@@ -408,6 +413,9 @@ public static class TestForgeTools
             // Step 5: Format for TestRail
             var formattedOutput = _testRailFormattingService.FormatComprehensiveTestSuite(enhancedSuite);
 
+            // Step 6: Calculate comprehensive confidence metrics
+            var overallConfidence = CalculateOverallConfidence(enhancedSuite);
+
             var result = new
             {
                 success = true,
@@ -419,6 +427,23 @@ public static class TestForgeTools
                     enhancedTests = enhancedSuite.EnhancedTests.Count,
                     coverage = enhancedSuite.CoverageSummary.CoveragePercentage,
                     categories = enhancedSuite.EnhancedTests.GroupBy(t => t.Category).ToDictionary(g => g.Key.ToString(), g => g.Count())
+                },
+                confidenceMetrics = new
+                {
+                    overallConfidence = overallConfidence.OverallConfidence,
+                    averageConfidence = overallConfidence.AverageConfidence,
+                    confidenceRange = new
+                    {
+                        minimum = overallConfidence.MinimumConfidence,
+                        maximum = overallConfidence.MaximumConfidence
+                    },
+                    distribution = overallConfidence.ConfidenceDistribution,
+                    qualityIndicators = new
+                    {
+                        highConfidencePercentage = enhancedSuite.TotalTestCount > 0 ? (double)overallConfidence.QualityMetrics.HighConfidenceTests / enhancedSuite.TotalTestCount * 100 : 0,
+                        averageStepsPerTest = overallConfidence.QualityMetrics.AverageStepsPerTest,
+                        categoryDiversity = overallConfidence.QualityMetrics.CategoryCoverage
+                    }
                 },
                 coverageBreakdown = enhancedSuite.CoverageSummary,
                 testSuite = enhancedSuite,
@@ -758,6 +783,115 @@ public static class TestForgeTools
         }
 
         return nextSteps;
+    }
+
+    /// <summary>
+    /// Calculate initial confidence score based on Jira data quality
+    /// </summary>
+    private static double CalculateInitialConfidence(ParsedJiraData? parsedData)
+    {
+        if (parsedData == null) return 0.5;
+        
+        double baseConfidence = 0.6;
+        
+        // Boost confidence based on data quality
+        if (!string.IsNullOrEmpty(parsedData.Summary)) baseConfidence += 0.1;
+        if (!string.IsNullOrEmpty(parsedData.Description)) baseConfidence += 0.1;
+        if (parsedData.AcceptanceCriteria?.Any() == true) baseConfidence += 0.15;
+        if (parsedData.ComplexityScore > 0) baseConfidence += 0.05;
+        
+        return Math.Min(0.95, baseConfidence);
+    }
+
+    /// <summary>
+    /// Calculate data completeness score for confidence assessment
+    /// </summary>
+    private static double CalculateDataCompleteness(ParsedJiraData? parsedData)
+    {
+        if (parsedData == null) return 0.0;
+        
+        int completenessScore = 0;
+        int totalFields = 6;
+        
+        if (!string.IsNullOrEmpty(parsedData.TicketId)) completenessScore++;
+        if (!string.IsNullOrEmpty(parsedData.Summary)) completenessScore++;
+        if (!string.IsNullOrEmpty(parsedData.Description)) completenessScore++;
+        if (!string.IsNullOrEmpty(parsedData.Type)) completenessScore++;
+        if (!string.IsNullOrEmpty(parsedData.Priority)) completenessScore++;
+        if (parsedData.AcceptanceCriteria?.Any() == true) completenessScore++;
+        
+        return (double)completenessScore / totalFields;
+    }
+
+    /// <summary>
+    /// Calculate comprehensive overall confidence score for test suite
+    /// </summary>
+    private static OverallConfidenceScore CalculateOverallConfidence(EnhancedTestSuite testSuite)
+    {
+        var allTests = testSuite.OriginalTests.Concat(testSuite.EnhancedTests).ToList();
+        
+        if (!allTests.Any())
+        {
+            return new OverallConfidenceScore
+            {
+                OverallConfidence = 0.0,
+                AverageConfidence = 0.0,
+                ConfidenceDistribution = new Dictionary<string, int>(),
+                QualityMetrics = new QualityMetrics { TotalTests = 0 }
+            };
+        }
+        
+        var avgConfidence = allTests.Average(t => t.Confidence);
+        var minConfidence = allTests.Min(t => t.Confidence);
+        var maxConfidence = allTests.Max(t => t.Confidence);
+        
+        // Calculate overall confidence with adjustments
+        double overallConfidence = avgConfidence;
+        
+        // Penalize for low minimum confidence
+        if (minConfidence < 0.6) overallConfidence *= 0.9;
+        
+        // Boost for high coverage
+        if (testSuite.CoverageSummary.CoveragePercentage > 80) overallConfidence *= 1.05;
+        
+        // Boost for test variety
+        var categoryCount = allTests.GroupBy(t => t.Category).Count();
+        if (categoryCount >= 8) overallConfidence *= 1.03;
+        
+        overallConfidence = Math.Min(0.98, overallConfidence);
+        
+        return new OverallConfidenceScore
+        {
+            OverallConfidence = overallConfidence,
+            AverageConfidence = avgConfidence,
+            MinimumConfidence = minConfidence,
+            MaximumConfidence = maxConfidence,
+            ConfidenceDistribution = CalculateConfidenceDistribution(allTests),
+            QualityMetrics = new QualityMetrics
+            {
+                TotalTests = allTests.Count,
+                HighConfidenceTests = allTests.Count(t => t.Confidence >= 0.8),
+                MediumConfidenceTests = allTests.Count(t => t.Confidence >= 0.6 && t.Confidence < 0.8),
+                LowConfidenceTests = allTests.Count(t => t.Confidence < 0.6),
+                CategoryCoverage = categoryCount,
+                AverageStepsPerTest = allTests.Where(t => t.TestSteps?.Any() == true).Any() 
+                    ? allTests.Where(t => t.TestSteps?.Any() == true).Average(t => t.TestSteps.Count) 
+                    : 0.0
+            }
+        };
+    }
+
+    /// <summary>
+    /// Calculate confidence distribution across test cases
+    /// </summary>
+    private static Dictionary<string, int> CalculateConfidenceDistribution(List<TestCase> tests)
+    {
+        return new Dictionary<string, int>
+        {
+            ["High (0.8-1.0)"] = tests.Count(t => t.Confidence >= 0.8),
+            ["Medium (0.6-0.8)"] = tests.Count(t => t.Confidence >= 0.6 && t.Confidence < 0.8),
+            ["Low (0.0-0.6)"] = tests.Count(t => t.Confidence < 0.6)
+        };
     }
 
     #endregion

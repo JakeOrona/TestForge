@@ -31,6 +31,42 @@ A comprehensive AI-powered test case generation platform built with .NET and Ang
 - **Performance Triggers**: Domain-aware performance test generation (latency, load, stress)
 - **Comprehensive Test Matrix**: 14-category coverage analysis with gap identification
 
+### 📊 **Enhanced Confidence Scoring System**
+
+TestForge now provides comprehensive confidence scoring for both individual test cases and overall test suite quality:
+
+**Individual Test Case Confidence (0.80-0.95 range)**:
+- **Initial Test Case**: Calculated from Jira data quality (summary, description, acceptance criteria)
+- **Enhanced Test Cases**: Category-specific confidence based on analysis depth and technical complexity
+- **Security Tests**: 0.85-0.90 confidence with SQL injection, XSS, and brute force protection
+- **Performance Tests**: 0.80-0.90 confidence with load testing and response time validation
+
+**Overall Confidence Metrics**:
+- **Overall Confidence Score**: Weighted average with coverage and variety bonuses
+- **Confidence Distribution**: High/Medium/Low categorization across all test cases
+- **Quality Indicators**: High confidence percentage, average steps per test, category diversity
+
+**Example Enhanced Output**:
+```json
+"confidenceMetrics": {
+  "overallConfidence": 0.893,
+  "averageConfidence": 0.867,
+  "confidenceRange": { "minimum": 0.8, "maximum": 0.95 },
+  "distribution": { "High (0.8-1.0)": 18, "Medium (0.6-0.8)": 0, "Low (0.0-0.6)": 0 },
+  "qualityIndicators": {
+    "highConfidencePercentage": 100,
+    "averageStepsPerTest": 3.12,
+    "categoryDiversity": 8
+  }
+}
+```
+
+**Confidence Calculation Algorithm**:
+- **Data Quality Assessment**: Summary, description, acceptance criteria completeness
+- **Coverage Bonus**: Additional points for >80% coverage and 8+ test categories
+- **Variety Boost**: Higher scores for diverse test category distribution
+- **Quality Penalties**: Reduced confidence for low minimum scores or poor data completeness
+
 ### **All 14 enhanced tools are available**:
 
 ### 🛠️ Enhanced XML Cleaning Capabilities
