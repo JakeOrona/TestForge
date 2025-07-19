@@ -3,6 +3,64 @@ using TestForge.McpServer.Models;
 namespace TestForge.McpServer;
 
 /// <summary>
+/// Represents technical artifacts extracted from structured content
+/// </summary>
+public record TechnicalArtifacts
+{
+    public List<string> SampleData { get; init; } = new();
+    public List<string> FormatConstraints { get; init; } = new();
+    public List<string> SqlSnippets { get; init; } = new();
+    public List<string> ConfigurationHints { get; init; } = new();
+    public List<string> CodeExamples { get; init; } = new();
+    public List<string> TechnicalTerminology { get; init; } = new();
+    public List<string> ValidationRules { get; init; } = new();
+}
+
+/// <summary>
+/// Enhanced test categories for semantic inference
+/// </summary>
+public enum TestCategory
+{
+    Performance,
+    DataValidation,
+    FormatCompliance,
+    ConditionalLogic,
+    EdgeCases,
+    ScenarioExpansion,
+    BoundaryTests,
+    SecurityTests,
+    AccessibilityTests,
+    IntegrationTests,
+    UserExperienceTests,
+    StateManagementTests,
+    ErrorHandlingTests,
+    NegativeTests
+}
+
+/// <summary>
+/// Performance test types for domain-specific testing
+/// </summary>
+public enum PerformanceTestType
+{
+    LatencyTest,        // TTS rendering time
+    LoadTest,          // Concurrent pronunciation requests
+    StressTest,        // High-volume language switching
+    MemoryTest,        // Phoneme cache efficiency
+    TimeoutTest        // IVR flow timing constraints
+}
+
+/// <summary>
+/// Represents conditional logic extracted from descriptions
+/// </summary>
+public record ConditionalTest
+{
+    public string Condition { get; init; } = string.Empty;
+    public string Action { get; init; } = string.Empty;
+    public string TestCase { get; init; } = string.Empty;
+    public TestCategory Category { get; init; } = TestCategory.ConditionalLogic;
+}
+
+/// <summary>
 /// Represents a parsed Jira story with extracted fields
 /// </summary>
 public record JiraStory
@@ -240,7 +298,7 @@ public class TestCategoryBreakdown
 /// </summary>
 public class TestMatrix
 {
-    public List<TestCategory> Categories { get; set; } = new();
+    public List<TestCategoryDetails> Categories { get; set; } = new();
     public List<TestScenario> Scenarios { get; set; } = new();
     public TestCoverageMatrix CoverageMatrix { get; set; } = new();
 }
@@ -257,9 +315,9 @@ public class TestCoverageMatrix
 }
 
 /// <summary>
-/// Test category with comprehensive details
+/// Test category details with comprehensive information
 /// </summary>
-public class TestCategory
+public class TestCategoryDetails
 {
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;

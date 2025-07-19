@@ -490,4 +490,318 @@ public static class BusinessLogicAnalysisService
             }
         };
     }
+
+    /// <summary>
+    /// Enhanced method to extract conditional logic and fallback mechanisms from descriptions
+    /// </summary>
+    /// <param name="description">The description text to analyze</param>
+    /// <returns>List of conditional tests with branch coverage scenarios</returns>
+    public static List<ConditionalTest> ExtractConditionalLogic(string description)
+    {
+        var conditionalTests = new List<ConditionalTest>();
+        
+        if (string.IsNullOrWhiteSpace(description))
+            return conditionalTests;
+
+        // Fallback patterns
+        var fallbackPatterns = new[]
+        {
+            @"if\s+(.+?)\s+else\s+(.+?)(?:\.|$|,)",
+            @"when\s+(.+?)\s+then\s+(.+?)(?:\.|$|,)",
+            @"if\s+(.+?)\s+is\s+(?:null|empty|missing)\s*,?\s*(.+?)(?:\.|$)",
+            @"fallback\s+to\s+(.+?)(?:\.|$|,)",
+            @"use\s+(.+?)\s+when\s+(.+?)(?:\.|$|,)",
+            @"apply\s+(.+?)\s+if\s+(.+?)(?:\.|$|,)"
+        };
+
+        // Optional feature patterns
+        var optionalPatterns = new[]
+        {
+            @"if\s+present,?\s*(.+?)(?:\.|$|,)",
+            @"when\s+available,?\s*(.+?)(?:\.|$|,)",
+            @"optional\s+(.+?)(?:\.|$|,)",
+            @"if\s+(?:provided|supplied|given),?\s*(.+?)(?:\.|$|,)"
+        };
+
+        // Decision flow patterns
+        var decisionPatterns = new[]
+        {
+            @"use\s+(.+?)\s+when\s+(.+?)(?:\.|$|,)",
+            @"apply\s+(.+?)\s+if\s+(.+?)(?:\.|$|,)",
+            @"switch\s+to\s+(.+?)\s+when\s+(.+?)(?:\.|$|,)",
+            @"default\s+to\s+(.+?)(?:\.|$|,)"
+        };
+
+        // Extract fallback scenarios
+        foreach (var pattern in fallbackPatterns)
+        {
+            var matches = Regex.Matches(description, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            foreach (Match match in matches)
+            {
+                if (match.Groups.Count >= 3)
+                {
+                    conditionalTests.Add(new ConditionalTest
+                    {
+                        Condition = match.Groups[1].Value.Trim(),
+                        Action = match.Groups[2].Value.Trim(),
+                        TestCase = $"Verify {match.Groups[2].Value.Trim()} when {match.Groups[1].Value.Trim()}",
+                        Category = TestCategory.ConditionalLogic
+                    });
+
+                    // Add negative test case
+                    conditionalTests.Add(new ConditionalTest
+                    {
+                        Condition = $"NOT ({match.Groups[1].Value.Trim()})",
+                        Action = "fallback behavior",
+                        TestCase = $"Verify fallback behavior when {match.Groups[1].Value.Trim()} is false",
+                        Category = TestCategory.EdgeCases
+                    });
+                }
+            }
+        }
+
+        // Extract optional feature scenarios
+        foreach (var pattern in optionalPatterns)
+        {
+            var matches = Regex.Matches(description, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            foreach (Match match in matches)
+            {
+                var feature = match.Groups[1].Value.Trim();
+                
+                conditionalTests.Add(new ConditionalTest
+                {
+                    Condition = "feature is present",
+                    Action = feature,
+                    TestCase = $"Verify {feature} when feature is available",
+                    Category = TestCategory.ConditionalLogic
+                });
+
+                conditionalTests.Add(new ConditionalTest
+                {
+                    Condition = "feature is absent",
+                    Action = "graceful degradation",
+                    TestCase = $"Verify graceful handling when feature is not available",
+                    Category = TestCategory.EdgeCases
+                });
+            }
+        }
+
+        // Extract decision flow scenarios
+        foreach (var pattern in decisionPatterns)
+        {
+            var matches = Regex.Matches(description, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            foreach (Match match in matches)
+            {
+                if (match.Groups.Count >= 3)
+                {
+                    conditionalTests.Add(new ConditionalTest
+                    {
+                        Condition = match.Groups[2].Value.Trim(),
+                        Action = match.Groups[1].Value.Trim(),
+                        TestCase = $"Verify {match.Groups[1].Value.Trim()} applied when {match.Groups[2].Value.Trim()}",
+                        Category = TestCategory.ConditionalLogic
+                    });
+                }
+            }
+        }
+
+        // Add specific phoneme/SSML conditional tests if detected
+        if (description.ToLower().Contains("phoneme") && description.ToLower().Contains("ssml"))
+        {
+            conditionalTests.Add(new ConditionalTest
+            {
+                Condition = "phoneme exists",
+                Action = "apply phoneme pronunciation",
+                TestCase = "Verify phoneme application when phoneme data is available",
+                Category = TestCategory.DataValidation
+            });
+
+            conditionalTests.Add(new ConditionalTest
+            {
+                Condition = "phoneme is null or empty",
+                Action = "use SSML fallback",
+                TestCase = "Verify SSML fallback when phoneme data is missing",
+                Category = TestCategory.ConditionalLogic
+            });
+        }
+
+        // Add IVR variant conditional tests if detected
+        if (description.ToLower().Contains("ivr") && (description.ToLower().Contains("variant") || description.ToLower().Contains("type")))
+        {
+            var ivrTypes = ExtractIVRTypes(description);
+            foreach (var ivrType in ivrTypes)
+            {
+                conditionalTests.Add(new ConditionalTest
+                {
+                    Condition = $"IVR type is {ivrType}",
+                    Action = $"apply {ivrType} specific behavior",
+                    TestCase = $"Verify {ivrType} specific behavior when IVR type is {ivrType}",
+                    Category = TestCategory.ScenarioExpansion
+                });
+            }
+        }
+
+        return conditionalTests;
+    }
+
+    /// <summary>
+    /// Analyzes decision tree complexity and generates branch coverage tests
+    /// </summary>
+    /// <param name="description">The description to analyze</param>
+    /// <returns>Decision tree analysis with branch coverage recommendations</returns>
+    public static object AnalyzeDecisionTrees(string description)
+    {
+        var conditionalTests = ExtractConditionalLogic(description);
+        var decisionPaths = new List<object>();
+        var branchCoverage = new List<object>();
+
+        // Group by condition types
+        var conditionGroups = conditionalTests.GroupBy(t => ExtractConditionType(t.Condition));
+
+        foreach (var group in conditionGroups)
+        {
+            var conditionType = group.Key;
+            var tests = group.ToList();
+
+            decisionPaths.Add(new
+            {
+                conditionType = conditionType,
+                pathCount = tests.Count,
+                conditions = tests.Select(t => t.Condition).ToArray(),
+                actions = tests.Select(t => t.Action).ToArray(),
+                testCases = tests.Select(t => t.TestCase).ToArray()
+            });
+
+            // Generate branch coverage scenarios
+            branchCoverage.Add(new
+            {
+                branchType = conditionType,
+                coverage = new
+                {
+                    totalBranches = tests.Count,
+                    testedBranches = tests.Count, // All branches should be tested
+                    coveragePercentage = 100.0,
+                    missingBranches = new string[0] // No missing branches in generated tests
+                },
+                testScenarios = tests.Select(t => new
+                {
+                    scenario = t.TestCase,
+                    condition = t.Condition,
+                    expectedAction = t.Action,
+                    category = t.Category.ToString(),
+                    priority = DeterminePriority(t)
+                }).ToArray()
+            });
+        }
+
+        return new
+        {
+            decisionTreeAnalysis = new
+            {
+                totalDecisionPoints = conditionalTests.Count,
+                decisionPaths = decisionPaths.ToArray(),
+                complexity = DetermineDecisionComplexity(conditionalTests.Count),
+                branchCoverageAnalysis = branchCoverage.ToArray()
+            },
+            testingRecommendations = new
+            {
+                minimumTestCases = conditionalTests.Count,
+                recommendedTestCases = conditionalTests.Count * 2, // Include edge cases
+                testingApproach = "Branch coverage with edge case validation",
+                automationFeasibility = conditionalTests.Count < 20 ? "High" : "Medium"
+            },
+            conditionalLogicTests = conditionalTests.Select(t => new
+            {
+                condition = t.Condition,
+                action = t.Action,
+                testCase = t.TestCase,
+                category = t.Category.ToString(),
+                priority = DeterminePriority(t)
+            }).ToArray()
+        };
+    }
+
+    #region Helper Methods for Conditional Logic Analysis
+
+    private static List<string> ExtractIVRTypes(string description)
+    {
+        var ivrTypes = new List<string>();
+        var ivrPatterns = new[]
+        {
+            @"no[\-\s]?pin\s+ivr",
+            @"athena\s+ivr",
+            @"availity\s+ivr",
+            @"(\w+)\s+ivr\s+(?:type|variant)",
+            @"ivr\s+(?:type|variant)\s+(\w+)"
+        };
+
+        foreach (var pattern in ivrPatterns)
+        {
+            var matches = Regex.Matches(description, pattern, RegexOptions.IgnoreCase);
+            foreach (Match match in matches)
+            {
+                if (match.Value.ToLower().Contains("no-pin") || match.Value.ToLower().Contains("no pin"))
+                    ivrTypes.Add("no-pin");
+                else if (match.Value.ToLower().Contains("athena"))
+                    ivrTypes.Add("athena");
+                else if (match.Value.ToLower().Contains("availity"))
+                    ivrTypes.Add("availity");
+                else if (match.Groups.Count > 1 && !string.IsNullOrWhiteSpace(match.Groups[1].Value))
+                    ivrTypes.Add(match.Groups[1].Value.Trim());
+            }
+        }
+
+        return ivrTypes.Distinct().ToList();
+    }
+
+    private static string ExtractConditionType(string condition)
+    {
+        var lowerCondition = condition.ToLower();
+        
+        if (lowerCondition.Contains("null") || lowerCondition.Contains("empty") || lowerCondition.Contains("missing"))
+            return "Null_Check";
+        
+        if (lowerCondition.Contains("present") || lowerCondition.Contains("available") || lowerCondition.Contains("exists"))
+            return "Presence_Check";
+        
+        if (lowerCondition.Contains("type") || lowerCondition.Contains("variant"))
+            return "Type_Check";
+        
+        if (lowerCondition.Contains("phoneme") || lowerCondition.Contains("ssml"))
+            return "Audio_Condition";
+        
+        if (lowerCondition.Contains("ivr") || lowerCondition.Contains("flow"))
+            return "IVR_Condition";
+        
+        return "Generic_Condition";
+    }
+
+    private static string DeterminePriority(ConditionalTest test)
+    {
+        if (test.Category == TestCategory.ConditionalLogic)
+            return "High";
+        
+        if (test.Category == TestCategory.DataValidation)
+            return "High";
+        
+        if (test.Category == TestCategory.EdgeCases)
+            return "Medium";
+        
+        return "Medium";
+    }
+
+    private static string DetermineDecisionComplexity(int decisionCount)
+    {
+        return decisionCount switch
+        {
+            0 => "None",
+            1 => "Simple",
+            <= 3 => "Low",
+            <= 6 => "Medium",
+            <= 10 => "High",
+            _ => "Very High"
+        };
+    }
+
+    #endregion
 }

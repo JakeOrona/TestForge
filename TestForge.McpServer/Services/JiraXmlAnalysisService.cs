@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
+using HtmlAgilityPack;
 using TestForge.McpServer.Models;
 
 namespace TestForge.McpServer.Services;
@@ -649,5 +651,259 @@ public static class JiraXmlAnalysisService
         }
         
         return clarifications.Take(5).ToArray();
+    }
+
+    /// <summary>
+    /// Enhanced method to extract structured content from HTML description fields using HtmlAgilityPack
+    /// </summary>
+    /// <param name="descriptionElement">The XElement containing the description</param>
+    /// <returns>TechnicalArtifacts containing structured data</returns>
+    public static TechnicalArtifacts ExtractStructuredContent(XElement descriptionElement)
+    {
+        var artifacts = new TechnicalArtifacts();
+        
+        if (descriptionElement == null)
+            return artifacts;
+
+        var description = descriptionElement.Value ?? string.Empty;
+        
+        // Parse HTML content using HtmlAgilityPack
+        var doc = new HtmlDocument();
+        doc.LoadHtml(description);
+
+        // Extract from specific HTML elements
+        ExtractFromListElements(doc, artifacts);
+        ExtractFromCodeElements(doc, artifacts);
+        ExtractFromPreElements(doc, artifacts);
+        ExtractFromTechnicalTerms(doc, artifacts);
+        ExtractSqlSnippets(description, artifacts);
+        ExtractFormatConstraints(description, artifacts);
+        ExtractConfigurationHints(description, artifacts);
+
+        return artifacts;
+    }
+
+    /// <summary>
+    /// Extract structured data from HTML list elements
+    /// </summary>
+    private static void ExtractFromListElements(HtmlDocument doc, TechnicalArtifacts artifacts)
+    {
+        var listItems = doc.DocumentNode.SelectNodes("//ul/li | //ol/li");
+        if (listItems != null)
+        {
+            foreach (var li in listItems)
+            {
+                var text = li.InnerText?.Trim();
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    // Classify list items based on content
+                    if (IsCodeExample(text))
+                        artifacts.CodeExamples.Add(text);
+                    else if (IsFormatConstraint(text))
+                        artifacts.FormatConstraints.Add(text);
+                    else if (IsTechnicalTerminology(text))
+                        artifacts.TechnicalTerminology.Add(text);
+                    else
+                        artifacts.SampleData.Add(text);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Extract code examples from code and tt elements
+    /// </summary>
+    private static void ExtractFromCodeElements(HtmlDocument doc, TechnicalArtifacts artifacts)
+    {
+        var codeElements = doc.DocumentNode.SelectNodes("//code | //tt");
+        if (codeElements != null)
+        {
+            foreach (var code in codeElements)
+            {
+                var text = code.InnerText?.Trim();
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    artifacts.CodeExamples.Add(text);
+                    
+                    // Also check if it's a technical term
+                    if (IsTechnicalTerminology(text))
+                        artifacts.TechnicalTerminology.Add(text);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Extract from pre-formatted elements
+    /// </summary>
+    private static void ExtractFromPreElements(HtmlDocument doc, TechnicalArtifacts artifacts)
+    {
+        var preElements = doc.DocumentNode.SelectNodes("//pre");
+        if (preElements != null)
+        {
+            foreach (var pre in preElements)
+            {
+                var text = pre.InnerText?.Trim();
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    // Check if it's JSON, XML, or SQL
+                    if (IsJsonStructure(text))
+                        artifacts.SampleData.Add($"JSON: {text}");
+                    else if (IsXmlStructure(text))
+                        artifacts.SampleData.Add($"XML: {text}");
+                    else if (IsSqlSnippet(text))
+                        artifacts.SqlSnippets.Add(text);
+                    else
+                        artifacts.CodeExamples.Add(text);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Extract technical terminology from all text content
+    /// </summary>
+    private static void ExtractFromTechnicalTerms(HtmlDocument doc, TechnicalArtifacts artifacts)
+    {
+        var text = doc.DocumentNode.InnerText ?? string.Empty;
+        
+        // Technical patterns to look for
+        var technicalPatterns = new[]
+        {
+            @"\b[A-Z]{2,}\b", // Acronyms like SSML, IPA, TTS
+            @"\bphoneme\b", @"\bSSML\b", @"\bTTS\b", @"\bIVR\b",
+            @"\bJSON\b", @"\bXML\b", @"\bSQL\b", @"\bHTTP\b", @"\bAPI\b",
+            @"\bUnicode\b", @"\bUTF-8\b", @"\bIPA\b",
+            @"\bəɹˈdu\b", // IPA phonetic notation example
+            @"\b\w+\s*variants?\b", // Language variants
+            @"\b\w+\s*flow\b", // IVR flows
+            @"\bno.?pin\b", @"\bathena\b", @"\bavaility\b" // Specific IVR types
+        };
+
+        foreach (var pattern in technicalPatterns)
+        {
+            var matches = Regex.Matches(text, pattern, RegexOptions.IgnoreCase);
+            foreach (Match match in matches)
+            {
+                var term = match.Value.Trim();
+                if (!artifacts.TechnicalTerminology.Contains(term) && term.Length > 2)
+                    artifacts.TechnicalTerminology.Add(term);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Extract SQL snippets from description
+    /// </summary>
+    private static void ExtractSqlSnippets(string description, TechnicalArtifacts artifacts)
+    {
+        var sqlPatterns = new[]
+        {
+            @"UPDATE\s+\w+\s+SET.*?(?:WHERE.*?)?(?:;|$)",
+            @"INSERT\s+INTO\s+\w+.*?(?:;|$)",
+            @"SELECT\s+.*?FROM\s+\w+.*?(?:;|$)",
+            @"DELETE\s+FROM\s+\w+.*?(?:;|$)"
+        };
+
+        foreach (var pattern in sqlPatterns)
+        {
+            var matches = Regex.Matches(description, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            foreach (Match match in matches)
+            {
+                artifacts.SqlSnippets.Add(match.Value.Trim());
+            }
+        }
+    }
+
+    /// <summary>
+    /// Extract format constraints and validation rules
+    /// </summary>
+    private static void ExtractFormatConstraints(string description, TechnicalArtifacts artifacts)
+    {
+        var constraintPatterns = new[]
+        {
+            @"IPA\s+phonemes?",
+            @"Unicode\s+compliance",
+            @"format\s+constraint",
+            @"validation\s+rule",
+            @"must\s+be\s+\w+",
+            @"should\s+follow\s+\w+",
+            @"required\s+format",
+            @"length\s+\w+\s+\d+",
+            @"character\s+set"
+        };
+
+        foreach (var pattern in constraintPatterns)
+        {
+            var matches = Regex.Matches(description, pattern, RegexOptions.IgnoreCase);
+            foreach (Match match in matches)
+            {
+                artifacts.FormatConstraints.Add(match.Value.Trim());
+            }
+        }
+    }
+
+    /// <summary>
+    /// Extract configuration hints from description
+    /// </summary>
+    private static void ExtractConfigurationHints(string description, TechnicalArtifacts artifacts)
+    {
+        var configPatterns = new[]
+        {
+            @"IVR\s+variants?",
+            @"language\s+codes?",
+            @"configuration\s+\w+",
+            @"setting\s+\w+",
+            @"parameter\s+\w+",
+            @"option\s+\w+",
+            @"fallback\s+\w+",
+            @"default\s+\w+"
+        };
+
+        foreach (var pattern in configPatterns)
+        {
+            var matches = Regex.Matches(description, pattern, RegexOptions.IgnoreCase);
+            foreach (Match match in matches)
+            {
+                artifacts.ConfigurationHints.Add(match.Value.Trim());
+            }
+        }
+    }
+
+    /// <summary>
+    /// Helper methods for content classification
+    /// </summary>
+    private static bool IsCodeExample(string text)
+    {
+        return text.Contains("{") || text.Contains("<") || text.Contains("=") || 
+               text.Contains("function") || text.Contains("class") || text.Contains("var ");
+    }
+
+    private static bool IsFormatConstraint(string text)
+    {
+        return text.ToLower().Contains("format") || text.ToLower().Contains("constraint") ||
+               text.ToLower().Contains("validation") || text.ToLower().Contains("rule");
+    }
+
+    private static bool IsTechnicalTerminology(string text)
+    {
+        var techKeywords = new[] { "API", "JSON", "XML", "SQL", "HTTP", "TTS", "IVR", "SSML", "IPA", "phoneme" };
+        return techKeywords.Any(keyword => text.ToUpper().Contains(keyword));
+    }
+
+    private static bool IsJsonStructure(string text)
+    {
+        return text.Trim().StartsWith("{") && text.Trim().EndsWith("}");
+    }
+
+    private static bool IsXmlStructure(string text)
+    {
+        return text.Trim().StartsWith("<") && text.Trim().EndsWith(">");
+    }
+
+    private static bool IsSqlSnippet(string text)
+    {
+        var sqlKeywords = new[] { "SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "ALTER" };
+        return sqlKeywords.Any(keyword => text.ToUpper().Contains(keyword));
     }
 }

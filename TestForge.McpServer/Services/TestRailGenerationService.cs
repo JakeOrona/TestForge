@@ -706,6 +706,50 @@ public static class TestRailGenerationService
             }
         };
     }
+
+    /// <summary>
+    /// Generates performance tests based on domain context (simplified version)
+    /// </summary>
+    /// <param name="domain">The domain context</param>
+    /// <param name="contexts">List of contexts</param>
+    /// <returns>List of TestRail test cases</returns>
+    public static List<TestRailTestCase> GeneratePerformanceTestsFromDomain(string domain, List<string> contexts)
+    {
+        var performanceTests = new List<TestRailTestCase>();
+
+        performanceTests.Add(new TestRailTestCase
+        {
+            Title = $"Performance Test - {domain}",
+            Priority = "Medium",
+            Type = "Performance",
+            Preconditions = new List<string> { "Performance monitoring tools available" },
+            Steps = new List<TestRailStep>
+            {
+                new TestRailStep { StepNumber = 1, Action = "Execute performance test", ExpectedResult = "Performance within acceptable limits" }
+            }
+        });
+
+        return performanceTests;
+    }
+
+    /// <summary>
+    /// Extract contexts from description (helper method)
+    /// </summary>
+    /// <param name="description">Description to parse</param>
+    /// <returns>List of contexts found</returns>
+    private static List<string> ExtractContexts(string description)
+    {
+        var contexts = new List<string>();
+        
+        if (description.ToLower().Contains("no-pin"))
+            contexts.Add("no-pin IVR");
+        if (description.ToLower().Contains("athena"))
+            contexts.Add("athena IVR");
+        if (description.ToLower().Contains("availity"))
+            contexts.Add("availity IVR");
+            
+        return contexts.Any() ? contexts : new List<string> { "default" };
+    }
 }
 
 /// <summary>

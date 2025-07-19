@@ -27,6 +27,11 @@ public interface ILLMTestEnhancementService
     List<TestCase> GenerateUserExperienceTestScenarios(ParsedJiraData data);
     List<TestCase> GenerateDataValidationTestScenarios(ParsedJiraData data);
     List<TestCase> GenerateStateManagementTestScenarios(ParsedJiraData data);
+    
+    // New methods for enhanced capabilities
+    TestCategory[] InferTestCategoriesFromSemanticContext(string content);
+    List<TestCase> GeneratePerformanceTestsFromDomain(string domain, List<string> contexts);
+    List<TestCase> GenerateDataValidationTests(TechnicalArtifacts artifacts);
 }
 
 /// <summary>
@@ -37,6 +42,19 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
     private readonly ILogger<LLMTestEnhancementService> _logger;
     private readonly IUiComponentAnalysisService _uiAnalysisService;
     private readonly IBusinessLogicAnalysisService _businessLogicService;
+
+    // Semantic trigger rules for test category inference
+    private readonly Dictionary<string[], TestCategory[]> _semanticTriggers = new()
+    {
+        { new[] {"phoneme", "SSML", "pronunciation", "TTS", "audio"}, new[] {TestCategory.Performance, TestCategory.DataValidation} },
+        { new[] {"JSON", "SQL", "UPDATE", "database", "data"}, new[] {TestCategory.DataValidation, TestCategory.FormatCompliance} },
+        { new[] {"fallback", "optional", "if", "when", "conditional"}, new[] {TestCategory.ConditionalLogic, TestCategory.EdgeCases} },
+        { new[] {"IVR", "variants", "multiple", "flows", "contexts"}, new[] {TestCategory.ScenarioExpansion, TestCategory.IntegrationTests} },
+        { new[] {"performance", "latency", "load", "concurrent", "timeout"}, new[] {TestCategory.Performance, TestCategory.BoundaryTests} },
+        { new[] {"security", "auth", "permission", "access", "validation"}, new[] {TestCategory.SecurityTests, TestCategory.DataValidation} },
+        { new[] {"error", "exception", "failure", "invalid", "malformed"}, new[] {TestCategory.ErrorHandlingTests, TestCategory.NegativeTests} },
+        { new[] {"UI", "interface", "accessibility", "user", "experience"}, new[] {TestCategory.AccessibilityTests, TestCategory.UserExperienceTests} }
+    };
 
     public LLMTestEnhancementService(
         ILogger<LLMTestEnhancementService> logger,
@@ -131,7 +149,7 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
         var matrix = new TestMatrix();
         
         // Define comprehensive test categories
-        matrix.Categories = new List<TestCategory>
+        matrix.Categories = new List<TestCategoryDetails>
         {
             new() { Name = "Functional", Description = "Core functionality testing", TestTypes = new() { "Positive", "Negative", "Boundary" }, PotentialTestCount = 5 },
             new() { Name = "Security", Description = "Security and vulnerability testing", TestTypes = new() { "Authentication", "Authorization", "Input Validation", "XSS", "SQL Injection" }, PotentialTestCount = 8 },
@@ -1029,6 +1047,98 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
         }
 
         return roles.Distinct().ToList();
+    }
+
+    #endregion
+
+    #region Enhanced Semantic Analysis Methods
+
+    /// <summary>
+    /// Infers test categories from semantic context using keyword-to-category mapping
+    /// </summary>
+    /// <param name="content">The content to analyze</param>
+    /// <returns>Array of inferred test categories</returns>
+    public TestCategory[] InferTestCategoriesFromSemanticContext(string content)
+    {
+        var inferredCategories = new HashSet<TestCategory>();
+        var lowercaseContent = content.ToLower();
+
+        foreach (var trigger in _semanticTriggers)
+        {
+            var keywords = trigger.Key;
+            var categories = trigger.Value;
+
+            // Check if any of the keywords are present in the content
+            if (keywords.Any(keyword => lowercaseContent.Contains(keyword.ToLower())))
+            {
+                foreach (var category in categories)
+                {
+                    inferredCategories.Add(category);
+                }
+            }
+        }
+
+        // Always include basic categories if none were inferred
+        if (!inferredCategories.Any())
+        {
+            inferredCategories.Add(TestCategory.DataValidation);
+            inferredCategories.Add(TestCategory.UserExperienceTests);
+        }
+
+        return inferredCategories.ToArray();
+    }
+
+    /// <summary>
+    /// Generates performance tests based on domain context (simplified version)
+    /// </summary>
+    /// <param name="domain">The domain context</param>
+    /// <param name="contexts">List of specific contexts</param>
+    /// <returns>List of basic test cases</returns>
+    public List<TestCase> GeneratePerformanceTestsFromDomain(string domain, List<string> contexts)
+    {
+        var performanceTests = new List<TestCase>();
+        
+        // Generate basic performance test
+        performanceTests.Add(new TestCase
+        {
+            Title = $"Performance Test for {domain}",
+            Description = $"Basic performance test for {domain} domain",
+            Priority = "Medium",
+            Category = TestCategoryType.Performance,
+            Type = TestType.Positive,
+            TestSteps = new List<TestStep>
+            {
+                new() { StepNumber = 1, Action = "Execute performance test", ExpectedResult = "Performance within limits" }
+            }
+        });
+
+        return performanceTests;
+    }
+
+    /// <summary>
+    /// Generates data validation tests based on technical artifacts (simplified version)
+    /// </summary>
+    /// <param name="artifacts">Technical artifacts</param>
+    /// <returns>List of validation test cases</returns>
+    public List<TestCase> GenerateDataValidationTests(TechnicalArtifacts artifacts)
+    {
+        var validationTests = new List<TestCase>();
+
+        // Generate basic validation test
+        validationTests.Add(new TestCase
+        {
+            Title = "Data Validation Test",
+            Description = "Basic data validation test",
+            Priority = "High",
+            Category = TestCategoryType.DataValidation,
+            Type = TestType.Positive,
+            TestSteps = new List<TestStep>
+            {
+                new() { StepNumber = 1, Action = "Validate data format", ExpectedResult = "Data validation passes" }
+            }
+        });
+
+        return validationTests;
     }
 
     #endregion

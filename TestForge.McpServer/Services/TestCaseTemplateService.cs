@@ -444,4 +444,489 @@ public static class TestCaseTemplateService
             }
         };
     }
+
+    /// <summary>
+    /// Expands test scenarios for multiple contexts using cartesian product approach
+    /// </summary>
+    /// <param name="contexts">List of contexts to expand across (e.g., IVR types, user roles, environments)</param>
+    /// <param name="baseTestCase">Base test case template to expand</param>
+    /// <returns>List of context-specific test case variants</returns>
+    public static List<object> ExpandScenariosForMultipleContexts(List<string> contexts, object baseTestCase)
+    {
+        var expandedTests = new List<object>();
+        
+        if (!contexts.Any())
+        {
+            expandedTests.Add(baseTestCase);
+            return expandedTests;
+        }
+
+        // Extract base test properties using reflection or dynamic
+        var baseTest = baseTestCase as dynamic ?? throw new ArgumentException("Invalid base test case format");
+        
+        foreach (var context in contexts)
+        {
+            var contextSpecificTest = new
+            {
+                type = $"{baseTest.type}_{SanitizeContextName(context)}",
+                title = $"{baseTest.title} in {context} context",
+                priority = baseTest.priority,
+                category = baseTest.category,
+                context = context,
+                steps = ExpandStepsForContext(baseTest.steps, context),
+                expectedResult = $"{baseTest.expectedResult} in {context} environment",
+                testData = $"{baseTest.testData} - {context} specific",
+                confidence = AdjustConfidenceForContext(baseTest.confidence, context),
+                llmGuidance = new
+                {
+                    expandAreas = new[] { 
+                        $"Context-specific requirements for {context}",
+                        $"Environmental considerations for {context}",
+                        $"Integration points in {context}"
+                    },
+                    considerations = new[] { 
+                        $"{context} specific behavior",
+                        "Context switching scenarios",
+                        "Cross-context compatibility"
+                    },
+                    contextType = DetermineContextType(context)
+                },
+                metadata = new
+                {
+                    isContextExpanded = true,
+                    baseTestType = baseTest.type,
+                    expandedFrom = "multi_context_expansion",
+                    contextCategory = CategorizeContext(context)
+                }
+            };
+            
+            expandedTests.Add(contextSpecificTest);
+        }
+
+        // Add cross-context interaction tests
+        if (contexts.Count > 1)
+        {
+            expandedTests.AddRange(GenerateCrossContextTests(contexts, baseTest));
+        }
+
+        return expandedTests;
+    }
+
+    /// <summary>
+    /// Enhanced data validation test generation based on technical artifacts
+    /// </summary>
+    /// <param name="artifacts">Technical artifacts extracted from content</param>
+    /// <returns>Comprehensive data validation test templates</returns>
+    public static List<object> GenerateDataValidationTests(TechnicalArtifacts artifacts)
+    {
+        var validationTests = new List<object>();
+
+        // Format validation tests
+        validationTests.AddRange(GenerateFormatValidationTemplates(artifacts));
+
+        // Boundary tests
+        validationTests.AddRange(GenerateBoundaryTestTemplates(artifacts));
+
+        // Malformed input tests
+        validationTests.AddRange(GenerateMalformedInputTemplates(artifacts));
+
+        // SQL-specific validation tests
+        if (artifacts.SqlSnippets.Any())
+        {
+            validationTests.AddRange(GenerateSqlValidationTemplates(artifacts));
+        }
+
+        // Configuration validation tests
+        if (artifacts.ConfigurationHints.Any())
+        {
+            validationTests.AddRange(GenerateConfigValidationTemplates(artifacts));
+        }
+
+        return validationTests;
+    }
+
+    #region Context Expansion Helper Methods
+
+    private static string SanitizeContextName(string context)
+    {
+        return context.ToLower()
+                     .Replace(" ", "_")
+                     .Replace("-", "_")
+                     .Replace(".", "")
+                     .Trim();
+    }
+
+    private static string[] ExpandStepsForContext(dynamic steps, string context)
+    {
+        var baseSteps = steps as string[] ?? new string[0];
+        var contextSteps = new List<string>();
+
+        // Add context setup step
+        contextSteps.Add($"Configure {context} environment");
+
+        // Expand existing steps with context
+        foreach (var step in baseSteps)
+        {
+            contextSteps.Add($"{step} in {context} context");
+        }
+
+        // Add context-specific validation step
+        contextSteps.Add($"Verify {context} specific behavior");
+
+        return contextSteps.ToArray();
+    }
+
+    private static double AdjustConfidenceForContext(dynamic baseConfidence, string context)
+    {
+        var confidence = Convert.ToDouble(baseConfidence);
+        
+        // Adjust confidence based on context complexity
+        if (context.ToLower().Contains("no-pin") || context.ToLower().Contains("athena"))
+        {
+            return Math.Max(0.6, confidence - 0.1); // Slightly reduce for complex IVR contexts
+        }
+        
+        if (context.ToLower().Contains("fallback") || context.ToLower().Contains("error"))
+        {
+            return Math.Max(0.5, confidence - 0.2); // Reduce for error scenarios
+        }
+
+        return confidence;
+    }
+
+    private static string DetermineContextType(string context)
+    {
+        var lowerContext = context.ToLower();
+        
+        if (lowerContext.Contains("ivr") || lowerContext.Contains("pin") || lowerContext.Contains("athena"))
+            return "IVR_Context";
+        
+        if (lowerContext.Contains("language") || lowerContext.Contains("locale"))
+            return "Language_Context";
+        
+        if (lowerContext.Contains("user") || lowerContext.Contains("role"))
+            return "User_Context";
+        
+        if (lowerContext.Contains("environment") || lowerContext.Contains("env"))
+            return "Environment_Context";
+        
+        return "Generic_Context";
+    }
+
+    private static string CategorizeContext(string context)
+    {
+        var lowerContext = context.ToLower();
+        
+        if (lowerContext.Contains("performance") || lowerContext.Contains("load"))
+            return "Performance";
+        
+        if (lowerContext.Contains("security") || lowerContext.Contains("auth"))
+            return "Security";
+        
+        if (lowerContext.Contains("ui") || lowerContext.Contains("interface"))
+            return "UserInterface";
+        
+        if (lowerContext.Contains("integration") || lowerContext.Contains("api"))
+            return "Integration";
+        
+        return "Functional";
+    }
+
+    private static List<object> GenerateCrossContextTests(List<string> contexts, dynamic baseTest)
+    {
+        var crossContextTests = new List<object>();
+        
+        // Generate tests for context transitions
+        for (int i = 0; i < contexts.Count - 1; i++)
+        {
+            for (int j = i + 1; j < contexts.Count; j++)
+            {
+                var fromContext = contexts[i];
+                var toContext = contexts[j];
+                
+                crossContextTests.Add(new
+                {
+                    type = $"context_transition_{SanitizeContextName(fromContext)}_to_{SanitizeContextName(toContext)}",
+                    title = $"Context Transition: {fromContext} to {toContext}",
+                    priority = baseTest.priority,
+                    category = "Integration",
+                    contexts = new[] { fromContext, toContext },
+                    steps = new[]
+                    {
+                        $"Initialize {fromContext} context",
+                        $"Perform base operation in {fromContext}",
+                        $"Transition to {toContext} context",
+                        $"Verify state preservation during transition",
+                        $"Complete operation in {toContext}",
+                        "Validate cross-context behavior"
+                    },
+                    expectedResult = $"Successful transition from {fromContext} to {toContext} with state preservation",
+                    testData = $"Cross-context test data for {fromContext} and {toContext}",
+                    confidence = AdjustConfidenceForContext(baseTest.confidence, "cross_context") - 0.1,
+                    llmGuidance = new
+                    {
+                        expandAreas = new[] { 
+                            "State preservation requirements",
+                            "Context switching protocols",
+                            "Error handling during transitions"
+                        },
+                        considerations = new[] { 
+                            "Data consistency across contexts",
+                            "Performance impact of context switching",
+                            "User experience during transitions"
+                        },
+                        contextType = "Cross_Context_Transition"
+                    },
+                    metadata = new
+                    {
+                        isCrossContext = true,
+                        fromContext = fromContext,
+                        toContext = toContext,
+                        transitionType = "sequential"
+                    }
+                });
+            }
+        }
+
+        return crossContextTests;
+    }
+
+    #endregion
+
+    #region Data Validation Template Generators
+
+    private static List<object> GenerateFormatValidationTemplates(TechnicalArtifacts artifacts)
+    {
+        var templates = new List<object>();
+
+        // IPA phoneme validation
+        if (artifacts.TechnicalTerminology.Any(t => t.ToLower().Contains("phoneme") || t.ToLower().Contains("ipa")))
+        {
+            templates.Add(new
+            {
+                type = "ipa_phoneme_format_validation",
+                title = "IPA Phoneme Format Validation",
+                priority = "High",
+                category = "DataValidation",
+                steps = new[]
+                {
+                    "Submit valid IPA phoneme format (e.g., ərˈdu)",
+                    "Verify phoneme acceptance",
+                    "Test phoneme processing",
+                    "Validate output format"
+                },
+                expectedResult = "Valid IPA phonemes accepted and processed correctly",
+                testData = "Valid IPA phoneme samples: ərˈdu, ˈæpəl, həˈloʊ",
+                confidence = 0.9,
+                llmGuidance = new
+                {
+                    expandAreas = new[] { "IPA character set validation", "Unicode support", "Pronunciation accuracy" },
+                    considerations = new[] { "Character encoding", "Language support", "Audio output quality" }
+                }
+            });
+
+            templates.Add(new
+            {
+                type = "invalid_phoneme_rejection",
+                title = "Invalid Phoneme Character Rejection",
+                priority = "High",
+                category = "NegativeValidation",
+                steps = new[]
+                {
+                    "Submit invalid phoneme characters",
+                    "Verify rejection with clear error",
+                    "Test various invalid formats",
+                    "Confirm error message clarity"
+                },
+                expectedResult = "Invalid phonemes rejected with descriptive error messages",
+                testData = "Invalid samples: abc123, @@##, empty string, null",
+                confidence = 0.85,
+                llmGuidance = new
+                {
+                    expandAreas = new[] { "Error message quality", "Input sanitization", "User guidance" },
+                    considerations = new[] { "User experience", "Security", "Error recovery" }
+                }
+            });
+        }
+
+        // Unicode compliance validation
+        if (artifacts.FormatConstraints.Any(c => c.ToLower().Contains("unicode")))
+        {
+            templates.Add(new
+            {
+                type = "unicode_compliance_validation",
+                title = "Unicode Compliance Verification",
+                priority = "Medium",
+                category = "FormatCompliance",
+                steps = new[]
+                {
+                    "Submit Unicode test strings",
+                    "Verify proper encoding handling",
+                    "Test special Unicode characters",
+                    "Validate character preservation"
+                },
+                expectedResult = "Unicode characters handled correctly with proper encoding",
+                testData = "Unicode samples: 你好, مرحبا, עברית, русский",
+                confidence = 0.8,
+                llmGuidance = new
+                {
+                    expandAreas = new[] { "Character encoding standards", "Multi-language support", "Display rendering" },
+                    considerations = new[] { "Internationalization", "Accessibility", "Performance" }
+                }
+            });
+        }
+
+        return templates;
+    }
+
+    private static List<object> GenerateBoundaryTestTemplates(TechnicalArtifacts artifacts)
+    {
+        var templates = new List<object>();
+
+        templates.Add(new
+        {
+            type = "maximum_length_boundary",
+            title = "Maximum Input Length Boundary Test",
+            priority = "Medium",
+            category = "BoundaryValidation",
+            steps = new[]
+            {
+                "Determine maximum allowed input length",
+                "Submit input at maximum length",
+                "Submit input exceeding maximum by 1 character",
+                "Verify appropriate handling"
+            },
+            expectedResult = "Maximum length enforced with clear boundary behavior",
+            testData = "Strings at and beyond maximum length limits",
+            confidence = 0.85,
+            llmGuidance = new
+            {
+                expandAreas = new[] { "Length limits definition", "Error handling", "Performance impact" },
+                considerations = new[] { "User experience", "System stability", "Memory usage" }
+            }
+        });
+
+        templates.Add(new
+        {
+            type = "empty_null_input_handling",
+            title = "Empty and Null Input Handling",
+            priority = "High",
+            category = "BoundaryValidation",
+            steps = new[]
+            {
+                "Submit empty string input",
+                "Submit null value",
+                "Submit whitespace-only input",
+                "Verify consistent handling"
+            },
+            expectedResult = "Empty and null inputs handled gracefully with appropriate defaults or errors",
+            testData = "Empty string, null, whitespace variations",
+            confidence = 0.9,
+            llmGuidance = new
+            {
+                expandAreas = new[] { "Default value behavior", "Error messaging", "Input sanitization" },
+                considerations = new[] { "Data integrity", "User guidance", "System robustness" }
+            }
+        });
+
+        return templates;
+    }
+
+    private static List<object> GenerateMalformedInputTemplates(TechnicalArtifacts artifacts)
+    {
+        var templates = new List<object>();
+
+        if (artifacts.SampleData.Any(s => s.Contains("JSON")))
+        {
+            templates.Add(new
+            {
+                type = "malformed_json_handling",
+                title = "Malformed JSON Input Handling",
+                priority = "High",
+                category = "ErrorHandling",
+                steps = new[]
+                {
+                    "Submit JSON with missing brackets",
+                    "Submit JSON with invalid syntax",
+                    "Submit truncated JSON",
+                    "Verify error handling and recovery"
+                },
+                expectedResult = "Malformed JSON handled gracefully with descriptive errors",
+                testData = "Invalid JSON samples: {missing}, {\"key\":}, [{broken]",
+                confidence = 0.8,
+                llmGuidance = new
+                {
+                    expandAreas = new[] { "JSON parsing robustness", "Error recovery", "User feedback" },
+                    considerations = new[] { "Data validation", "Security", "User experience" }
+                }
+            });
+        }
+
+        return templates;
+    }
+
+    private static List<object> GenerateSqlValidationTemplates(TechnicalArtifacts artifacts)
+    {
+        var templates = new List<object>();
+
+        templates.Add(new
+        {
+            type = "sql_injection_protection",
+            title = "SQL Injection Protection Validation",
+            priority = "Critical",
+            category = "SecurityValidation",
+            steps = new[]
+            {
+                "Submit SQL injection attempt patterns",
+                "Verify input sanitization",
+                "Test parameterized query handling",
+                "Confirm database security"
+            },
+            expectedResult = "SQL injection attempts blocked with proper sanitization",
+            testData = "Injection patterns: '; DROP TABLE; --, UNION SELECT, etc.",
+            confidence = 0.95,
+            llmGuidance = new
+            {
+                expandAreas = new[] { "Input sanitization", "Parameterized queries", "Security logging" },
+                considerations = new[] { "Data security", "Compliance", "Attack prevention" }
+            }
+        });
+
+        return templates;
+    }
+
+    private static List<object> GenerateConfigValidationTemplates(TechnicalArtifacts artifacts)
+    {
+        var templates = new List<object>();
+
+        if (artifacts.ConfigurationHints.Any(c => c.ToLower().Contains("language")))
+        {
+            templates.Add(new
+            {
+                type = "language_config_validation",
+                title = "Language Configuration Validation",
+                priority = "Medium",
+                category = "ConfigurationValidation",
+                steps = new[]
+                {
+                    "Submit supported language codes",
+                    "Submit unsupported language codes",
+                    "Test fallback language behavior",
+                    "Verify configuration persistence"
+                },
+                expectedResult = "Language configuration handled with appropriate fallbacks",
+                testData = "Language codes: en-US, es-ES, invalid-XX, null",
+                confidence = 0.8,
+                llmGuidance = new
+                {
+                    expandAreas = new[] { "Language support matrix", "Fallback strategies", "User preferences" },
+                    considerations = new[] { "Internationalization", "User experience", "Default behavior" }
+                }
+            });
+        }
+
+        return templates;
+    }
+
+    #endregion
 }
