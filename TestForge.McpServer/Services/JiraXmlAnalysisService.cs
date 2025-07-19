@@ -115,6 +115,7 @@ public static class JiraXmlAnalysisService
                 },
                 baselineTestCases = GenerateBaselineTestCases(story),
                 commentsAnalysis = AnalyzeComments(story.Comments),
+                executiveSummary = CalculateExecutiveSummaryConfidence(story, isValid, uiComponentsAnalysis, businessLogicAnalysis, complexityScore),
                 llmGuidance = new
                 {
                     focusAreas = DetermineFocusAreas(story, complexityScore),
@@ -507,6 +508,255 @@ public static class JiraXmlAnalysisService
             strategy += " with emphasis on integration and edge case testing";
             
         return strategy;
+    }
+
+    /// <summary>
+    /// Calculates comprehensive executive summary confidence with weighted factors
+    /// </summary>
+    /// <param name="story">The Jira story data</param>
+    /// <param name="xmlWasValid">Whether the XML was valid</param>
+    /// <param name="uiComponents">UI components analysis</param>
+    /// <param name="businessLogic">Business logic analysis</param>
+    /// <param name="complexityScore">Complexity score</param>
+    /// <returns>Executive summary confidence object</returns>
+    private static ExecutiveSummaryConfidence CalculateExecutiveSummaryConfidence(
+        JiraStory story, 
+        bool xmlWasValid, 
+        object uiComponents, 
+        object businessLogic, 
+        double complexityScore)
+    {
+        // Calculate individual confidence factors with weights
+        var breakdown = new ConfidenceBreakdown
+        {
+            XmlQuality = CalculateXmlQualityConfidence(xmlWasValid, story),
+            StoryCompleteness = CalculateStoryCompletenessConfidence(story),
+            AnalysisDepth = CalculateAnalysisDepthConfidence(uiComponents, businessLogic),
+            DataQuality = CalculateDataQualityConfidence(story),
+            IntegrationComplexity = CalculateIntegrationComplexityConfidence(story.Description),
+            TestCoverageReadiness = CalculateTestCoverageReadinessConfidence(story, complexityScore)
+        };
+
+        // Weighted calculation based on specified percentages
+        var overallConfidence = 
+            (breakdown.XmlQuality * 0.20) +           // XML Quality (20%)
+            (breakdown.StoryCompleteness * 0.25) +    // Story Completeness (25%)
+            (breakdown.AnalysisDepth * 0.20) +        // Analysis Depth (20%)
+            (breakdown.DataQuality * 0.15) +          // Data Quality (15%)
+            (breakdown.IntegrationComplexity * 0.10) + // Integration Complexity (10%)
+            (breakdown.TestCoverageReadiness * 0.10);  // Test Coverage Readiness (10%)
+
+        // Ensure confidence is within bounds
+        overallConfidence = Math.Max(0.0, Math.Min(1.0, overallConfidence));
+
+        var confidenceLevel = DetermineConfidenceLevel(overallConfidence);
+        var factors = AnalyzeConfidenceFactors(breakdown, story);
+        var recommendedAction = DetermineRecommendedAction(confidenceLevel, factors);
+
+        return new ExecutiveSummaryConfidence
+        {
+            OverallConfidence = Math.Round(overallConfidence, 3),
+            ConfidenceLevel = confidenceLevel,
+            ConfidenceBreakdown = breakdown,
+            ConfidenceFactors = factors,
+            RecommendedAction = recommendedAction
+        };
+    }
+
+    /// <summary>
+    /// Calculates XML quality confidence factor
+    /// </summary>
+    private static double CalculateXmlQualityConfidence(bool xmlWasValid, JiraStory story)
+    {
+        double confidence = xmlWasValid ? 0.8 : 0.4; // Base score for XML validity
+
+        // Boost confidence if key fields were successfully extracted
+        if (!string.IsNullOrEmpty(story.IssueKey)) confidence += 0.1;
+        if (!string.IsNullOrEmpty(story.Summary)) confidence += 0.05;
+        if (!string.IsNullOrEmpty(story.IssueType)) confidence += 0.05;
+
+        return Math.Min(1.0, confidence);
+    }
+
+    /// <summary>
+    /// Calculates story completeness confidence factor
+    /// </summary>
+    private static double CalculateStoryCompletenessConfidence(JiraStory story)
+    {
+        double confidence = 0.0;
+
+        // Core story elements
+        if (!string.IsNullOrEmpty(story.Summary)) confidence += 0.25;
+        if (!string.IsNullOrEmpty(story.Description)) confidence += 0.35;
+        if (story.AcceptanceCriteria.Any()) confidence += 0.30;
+        if (!string.IsNullOrEmpty(story.Priority)) confidence += 0.10;
+
+        return Math.Min(1.0, confidence);
+    }
+
+    /// <summary>
+    /// Calculates analysis depth confidence factor
+    /// </summary>
+    private static double CalculateAnalysisDepthConfidence(object uiComponents, object businessLogic)
+    {
+        double confidence = 0.5; // Base confidence
+
+        // UI components analysis depth
+        var uiList = uiComponents as IEnumerable<object>;
+        if (uiList != null && uiList.Any())
+        {
+            confidence += Math.Min(0.3, uiList.Count() * 0.1);
+        }
+
+        // Business logic analysis depth
+        var businessList = businessLogic as IEnumerable<object>;
+        if (businessList != null && businessList.Any())
+        {
+            confidence += Math.Min(0.2, businessList.Count() * 0.05);
+        }
+
+        return Math.Min(1.0, confidence);
+    }
+
+    /// <summary>
+    /// Calculates data quality confidence factor
+    /// </summary>
+    private static double CalculateDataQualityConfidence(JiraStory story)
+    {
+        double confidence = 0.3; // Base confidence
+
+        // Story points validity
+        if (int.TryParse(story.StoryPoints, out int points) && points > 0)
+            confidence += 0.2;
+
+        // Comments presence and quality
+        if (story.Comments.Any())
+        {
+            confidence += 0.15;
+            var recentComments = story.Comments.Where(c => c.Created > DateTime.Now.AddDays(-30)).Count();
+            if (recentComments > 0) confidence += 0.1;
+        }
+
+        // Custom fields
+        if (story.CustomFields.Any())
+        {
+            confidence += Math.Min(0.25, story.CustomFields.Count * 0.05);
+        }
+
+        return Math.Min(1.0, confidence);
+    }
+
+    /// <summary>
+    /// Calculates integration complexity confidence factor
+    /// </summary>
+    private static double CalculateIntegrationComplexityConfidence(string description)
+    {
+        if (string.IsNullOrEmpty(description)) return 0.5;
+
+        double confidence = 0.5; // Base confidence
+        var lowerDesc = description.ToLower();
+
+        // Integration indicators boost confidence in complexity analysis
+        var integrationKeywords = new[] { "api", "service", "integration", "database", "auth", "external", "system" };
+        var foundKeywords = integrationKeywords.Count(keyword => lowerDesc.Contains(keyword));
+        
+        confidence += Math.Min(0.5, foundKeywords * 0.1);
+
+        return Math.Min(1.0, confidence);
+    }
+
+    /// <summary>
+    /// Calculates test coverage readiness confidence factor
+    /// </summary>
+    private static double CalculateTestCoverageReadinessConfidence(JiraStory story, double complexityScore)
+    {
+        double confidence = 0.4; // Base confidence
+
+        // Acceptance criteria provide good test foundation
+        if (story.AcceptanceCriteria.Any())
+        {
+            confidence += 0.3;
+            // More criteria = better test coverage potential
+            confidence += Math.Min(0.2, story.AcceptanceCriteria.Count * 0.05);
+        }
+
+        // Complexity score influences test readiness
+        if (complexityScore <= 3.0) confidence += 0.1; // Simple stories easier to test
+        else if (complexityScore >= 7.0) confidence += 0.05; // Complex stories need more planning
+
+        // Description quality affects test case generation
+        if (!string.IsNullOrEmpty(story.Description) && story.Description.Length > 100)
+            confidence += 0.1;
+
+        return Math.Min(1.0, confidence);
+    }
+
+    /// <summary>
+    /// Determines confidence level based on overall score
+    /// </summary>
+    private static ConfidenceLevel DetermineConfidenceLevel(double overallConfidence)
+    {
+        return overallConfidence switch
+        {
+            >= 0.90 => ConfidenceLevel.High,
+            >= 0.75 => ConfidenceLevel.MediumHigh,
+            >= 0.60 => ConfidenceLevel.Medium,
+            >= 0.45 => ConfidenceLevel.LowMedium,
+            _ => ConfidenceLevel.Low
+        };
+    }
+
+    /// <summary>
+    /// Analyzes confidence factors to identify strengths and weaknesses
+    /// </summary>
+    private static ConfidenceFactors AnalyzeConfidenceFactors(ConfidenceBreakdown breakdown, JiraStory story)
+    {
+        var strengths = new List<string>();
+        var weaknesses = new List<string>();
+        var improvementAreas = new List<string>();
+
+        // Analyze each factor
+        if (breakdown.XmlQuality >= 0.8) strengths.Add("Valid XML structure with successful parsing");
+        else weaknesses.Add("XML quality issues affecting data extraction");
+
+        if (breakdown.StoryCompleteness >= 0.8) strengths.Add("Comprehensive story with all key elements");
+        else if (breakdown.StoryCompleteness < 0.5) weaknesses.Add("Incomplete story missing essential details");
+
+        if (breakdown.AnalysisDepth >= 0.7) strengths.Add("Deep component and business logic analysis");
+        else improvementAreas.Add("Enhanced component analysis needed");
+
+        if (breakdown.DataQuality >= 0.7) strengths.Add("Rich data with comments and custom fields");
+        else improvementAreas.Add("Additional metadata would improve analysis");
+
+        if (breakdown.TestCoverageReadiness >= 0.8) strengths.Add("Strong foundation for test case generation");
+        else improvementAreas.Add("More detailed acceptance criteria needed");
+
+        // Ensure we have at least one item in each category
+        if (!strengths.Any()) strengths.Add("Basic story structure present");
+        if (!weaknesses.Any() && !improvementAreas.Any()) improvementAreas.Add("Minor refinements possible");
+
+        return new ConfidenceFactors
+        {
+            Strengths = strengths,
+            Weaknesses = weaknesses,
+            ImprovementAreas = improvementAreas
+        };
+    }
+
+    /// <summary>
+    /// Determines recommended action based on confidence level
+    /// </summary>
+    private static string DetermineRecommendedAction(ConfidenceLevel level, ConfidenceFactors factors)
+    {
+        return level switch
+        {
+            ConfidenceLevel.High => "Proceed with automated test generation - excellent foundation available",
+            ConfidenceLevel.MediumHigh => "Proceed with LLM enhancement - good foundation with minor gaps",
+            ConfidenceLevel.Medium => "Proceed with LLM enhancement - adequate foundation requiring enhancement",
+            ConfidenceLevel.LowMedium => "Consider story refinement before test generation - significant enhancement needed",
+            ConfidenceLevel.Low => "Story requires significant improvement before reliable test generation",
+            _ => "Review and enhance story details before proceeding"
+        };
     }
 
     /// <summary>

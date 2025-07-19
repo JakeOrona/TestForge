@@ -100,6 +100,82 @@ public record JiraParseResult
 }
 
 /// <summary>
+/// Represents confidence level categorization
+/// </summary>
+public enum ConfidenceLevel
+{
+    Low,           // 0.00-0.44: Insufficient data for reliable test generation
+    LowMedium,     // 0.45-0.59: Partial analysis with significant enhancement needed
+    Medium,        // 0.60-0.74: Adequate analysis requiring LLM enhancement
+    MediumHigh,    // 0.75-0.89: Good analysis with minor gaps
+    High           // 0.90-1.00: Complete analysis with robust test foundation
+}
+
+/// <summary>
+/// Represents detailed confidence breakdown for executive summary
+/// </summary>
+public record ConfidenceBreakdown
+{
+    public double XmlQuality { get; init; }
+    public double StoryCompleteness { get; init; }
+    public double AnalysisDepth { get; init; }
+    public double DataQuality { get; init; }
+    public double IntegrationComplexity { get; init; }
+    public double TestCoverageReadiness { get; init; }
+}
+
+/// <summary>
+/// Represents confidence factors that influence the overall score
+/// </summary>
+public record ConfidenceFactors
+{
+    public List<string> Strengths { get; init; } = new();
+    public List<string> Weaknesses { get; init; } = new();
+    public List<string> ImprovementAreas { get; init; } = new();
+}
+
+/// <summary>
+/// Represents executive summary with confidence metrics
+/// </summary>
+public record ExecutiveSummaryConfidence
+{
+    public double OverallConfidence { get; init; }
+    public ConfidenceLevel ConfidenceLevel { get; init; }
+    public ConfidenceBreakdown ConfidenceBreakdown { get; init; } = new();
+    public ConfidenceFactors ConfidenceFactors { get; init; } = new();
+    public string RecommendedAction { get; init; } = string.Empty;
+    public DateTime CalculatedAt { get; init; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Represents LLM validation result for confidence adjustment
+/// </summary>
+public record LLMValidationResult
+{
+    public double TestCaseCompleteness { get; init; }
+    public double EdgeCaseAccuracy { get; init; }
+    public double BusinessLogicDepth { get; init; }
+    public double IntegrationCoverage { get; init; }
+    public double ErrorHandlingCompleteness { get; init; }
+    public double OverallQuality => (TestCaseCompleteness + EdgeCaseAccuracy + BusinessLogicDepth + IntegrationCoverage + ErrorHandlingCompleteness) / 5.0;
+    public List<string> ValidationNotes { get; init; } = new();
+}
+
+/// <summary>
+/// Represents final confidence score with reconciliation details
+/// </summary>
+public record FinalConfidenceScore
+{
+    public double BaselineConfidence { get; init; }
+    public double LLMValidationScore { get; init; }
+    public double FinalConfidence { get; init; }
+    public double ConfidenceAdjustment { get; init; }
+    public string AdjustmentReasoning { get; init; } = string.Empty;
+    public bool RequiresManualReview { get; init; }
+    public DateTime CalculatedAt { get; init; } = DateTime.UtcNow;
+}
+
+/// <summary>
 /// Represents a TestRail test case step with action and expected result
 /// </summary>
 public record TestRailStep

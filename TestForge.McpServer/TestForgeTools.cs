@@ -533,5 +533,193 @@ public static class TestForgeTools
         return testCases;
     }
 
+    /// <summary>
+    /// Validates generated test cases against original analysis and provides final confidence scoring with LLM validation
+    /// </summary>
+    /// <param name="testCases">Generated test cases as JSON string</param>
+    /// <param name="originalAnalysis">Original Jira analysis as JSON string</param>
+    /// <param name="baselineConfidence">Baseline executive summary confidence as JSON string</param>
+    /// <returns>Final confidence score with validation details and adjustment reasoning</returns>
+    [McpServerTool, Description("CONFIDENCE VALIDATION: Validates generated test cases against original analysis and provides final confidence scoring. Use this to get quality metrics and confidence adjustments after test case generation. Includes LLM validation criteria and reconciliation logic.")]
+    public static string ValidateTestCaseConfidence(
+        [Description("Generated test cases as JSON string")] string testCases,
+        [Description("Original Jira analysis as JSON string")] string originalAnalysis,
+        [Description("Baseline executive summary confidence as JSON string")] string baselineConfidence)
+    {
+        try
+        {
+            // Validate input parameters
+            if (string.IsNullOrWhiteSpace(testCases))
+            {
+                return JsonSerializer.Serialize(new { 
+                    error = "Missing required parameter: testCases",
+                    timestamp = DateTime.UtcNow
+                });
+            }
+
+            if (string.IsNullOrWhiteSpace(originalAnalysis))
+            {
+                return JsonSerializer.Serialize(new { 
+                    error = "Missing required parameter: originalAnalysis",
+                    timestamp = DateTime.UtcNow
+                });
+            }
+
+            if (string.IsNullOrWhiteSpace(baselineConfidence))
+            {
+                return JsonSerializer.Serialize(new { 
+                    error = "Missing required parameter: baselineConfidence",
+                    timestamp = DateTime.UtcNow
+                });
+            }
+
+            // Parse baseline confidence
+            ExecutiveSummaryConfidence? baseline;
+            try
+            {
+                baseline = JsonSerializer.Deserialize<ExecutiveSummaryConfidence>(baselineConfidence);
+                if (baseline == null)
+                {
+                    return JsonSerializer.Serialize(new { 
+                        error = "Invalid baseline confidence format - deserialization returned null",
+                        timestamp = DateTime.UtcNow
+                    });
+                }
+            }
+            catch (JsonException ex)
+            {
+                return JsonSerializer.Serialize(new { 
+                    error = $"Invalid baseline confidence JSON format: {ex.Message}",
+                    timestamp = DateTime.UtcNow
+                });
+            }
+
+            _logger?.LogInformation("Starting test case confidence validation with {TestCaseLength} test cases and {AnalysisLength} analysis data", 
+                testCases.Length, originalAnalysis.Length);
+
+            // Perform confidence validation and adjustment
+            var finalConfidenceScore = TestCaseTemplateService.ValidateAndAdjustConfidence(
+                testCases, originalAnalysis, baseline);
+
+            // Create comprehensive validation response
+            var validationResponse = new
+            {
+                timestamp = DateTime.UtcNow,
+                validationMethod = "LLM_CONFIDENCE_VALIDATION",
+                finalConfidenceScore = finalConfidenceScore,
+                recommendations = GenerateConfidenceRecommendations(finalConfidenceScore),
+                qualityMetrics = new
+                {
+                    confidenceVariance = Math.Abs(finalConfidenceScore.FinalConfidence - finalConfidenceScore.BaselineConfidence),
+                    confidenceDirection = finalConfidenceScore.FinalConfidence > finalConfidenceScore.BaselineConfidence ? "INCREASED" : 
+                                         finalConfidenceScore.FinalConfidence < finalConfidenceScore.BaselineConfidence ? "DECREASED" : "UNCHANGED",
+                    validationQuality = DetermineValidationQuality(finalConfidenceScore.LLMValidationScore),
+                    requiresManualReview = finalConfidenceScore.RequiresManualReview
+                },
+                nextSteps = DetermineNextSteps(finalConfidenceScore)
+            };
+
+            _logger?.LogInformation("Completed confidence validation - Final score: {FinalScore}, Adjustment: {Adjustment}, Manual review: {ManualReview}", 
+                finalConfidenceScore.FinalConfidence, finalConfidenceScore.ConfidenceAdjustment, finalConfidenceScore.RequiresManualReview);
+
+            return JsonSerializer.Serialize(validationResponse, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to validate test case confidence");
+            return JsonSerializer.Serialize(new { 
+                error = $"Confidence validation failed: {ex.Message}",
+                timestamp = DateTime.UtcNow,
+                fallbackRecommendation = "Consider manual review of test case quality and coverage"
+            });
+        }
+    }
+
+    /// <summary>
+    /// Generates recommendations based on confidence score results
+    /// </summary>
+    private static List<string> GenerateConfidenceRecommendations(FinalConfidenceScore score)
+    {
+        var recommendations = new List<string>();
+
+        if (score.FinalConfidence >= 0.85)
+        {
+            recommendations.Add("High confidence - Test cases are ready for execution");
+            recommendations.Add("Consider proceeding with test automation implementation");
+        }
+        else if (score.FinalConfidence >= 0.70)
+        {
+            recommendations.Add("Good confidence - Test cases have solid foundation");
+            recommendations.Add("Minor refinements may improve coverage");
+        }
+        else if (score.FinalConfidence >= 0.55)
+        {
+            recommendations.Add("Moderate confidence - Test cases need enhancement");
+            recommendations.Add("Consider additional test scenarios for better coverage");
+        }
+        else
+        {
+            recommendations.Add("Low confidence - Significant test case improvements needed");
+            recommendations.Add("Review requirements and enhance test case depth");
+        }
+
+        if (score.RequiresManualReview)
+        {
+            recommendations.Add("Manual review required due to confidence variance");
+        }
+
+        return recommendations;
+    }
+
+    /// <summary>
+    /// Determines validation quality level
+    /// </summary>
+    private static string DetermineValidationQuality(double validationScore)
+    {
+        return validationScore switch
+        {
+            >= 0.85 => "EXCELLENT",
+            >= 0.70 => "GOOD", 
+            >= 0.55 => "ADEQUATE",
+            >= 0.40 => "POOR",
+            _ => "CRITICAL"
+        };
+    }
+
+    /// <summary>
+    /// Determines next steps based on confidence results
+    /// </summary>
+    private static List<string> DetermineNextSteps(FinalConfidenceScore score)
+    {
+        var nextSteps = new List<string>();
+
+        if (score.FinalConfidence >= 0.80)
+        {
+            nextSteps.Add("Proceed with test execution planning");
+            nextSteps.Add("Consider test automation framework setup");
+            nextSteps.Add("Schedule test case review with stakeholders");
+        }
+        else if (score.FinalConfidence >= 0.60)
+        {
+            nextSteps.Add("Enhance test cases based on confidence factors");
+            nextSteps.Add("Add more edge case scenarios");
+            nextSteps.Add("Re-validate confidence after improvements");
+        }
+        else
+        {
+            nextSteps.Add("Revisit requirements analysis");
+            nextSteps.Add("Enhance test case foundation");
+            nextSteps.Add("Consider stakeholder input for missing scenarios");
+        }
+
+        if (score.RequiresManualReview)
+        {
+            nextSteps.Add("Schedule manual review session");
+            nextSteps.Add("Validate confidence variance with subject matter expert");
+        }
+
+        return nextSteps;
+    }
+
     #endregion
 }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using TestForge.McpServer.Models;
 
 namespace TestForge.McpServer.Services;
 
@@ -926,6 +927,272 @@ public static class TestCaseTemplateService
         }
 
         return templates;
+    }
+
+    #endregion
+
+    #region LLM Validation and Confidence Adjustment
+
+    /// <summary>
+    /// Validates generated test cases against original analysis and adjusts confidence
+    /// </summary>
+    /// <param name="testCases">Generated test cases to validate</param>
+    /// <param name="originalAnalysis">Original Jira analysis for comparison</param>
+    /// <param name="baselineConfidence">Baseline confidence from executive summary</param>
+    /// <returns>Final confidence score with adjustment reasoning</returns>
+    public static FinalConfidenceScore ValidateAndAdjustConfidence(
+        object testCases, 
+        object originalAnalysis, 
+        ExecutiveSummaryConfidence baselineConfidence)
+    {
+        try
+        {
+            var llmValidation = ValidateGeneratedTestCases(testCases, originalAnalysis);
+            var finalConfidence = ReconcileConfidenceScores(baselineConfidence.OverallConfidence, llmValidation);
+            
+            return finalConfidence;
+        }
+        catch (Exception ex)
+        {
+            // Graceful degradation - return baseline confidence if validation fails
+            return new FinalConfidenceScore
+            {
+                BaselineConfidence = baselineConfidence.OverallConfidence,
+                LLMValidationScore = 0.5, // Default fallback
+                FinalConfidence = Math.Max(0.4, baselineConfidence.OverallConfidence), // Slight penalty for validation failure
+                ConfidenceAdjustment = -0.1,
+                AdjustmentReasoning = $"Validation failed due to error: {ex.Message}. Applied conservative adjustment.",
+                RequiresManualReview = true
+            };
+        }
+    }
+
+    /// <summary>
+    /// Validates generated test cases quality against LLM validation criteria
+    /// </summary>
+    /// <param name="testCases">Generated test cases to validate</param>
+    /// <param name="originalAnalysis">Original analysis for comparison</param>
+    /// <returns>LLM validation result with quality scores</returns>
+    private static LLMValidationResult ValidateGeneratedTestCases(object testCases, object originalAnalysis)
+    {
+        // Convert test cases to analyzable format
+        var testCaseJson = testCases?.ToString() ?? "{}";
+        var analysisJson = originalAnalysis?.ToString() ?? "{}";
+        
+        // Assess test case completeness vs. requirements coverage
+        var testCaseCompleteness = AssessTestCaseCompleteness(testCaseJson, analysisJson);
+        
+        // Evaluate edge case identification accuracy
+        var edgeCaseAccuracy = AssessEdgeCaseAccuracy(testCaseJson, analysisJson);
+        
+        // Analyze business logic validation depth
+        var businessLogicDepth = AssessBusinessLogicDepth(testCaseJson, analysisJson);
+        
+        // Check integration testing coverage adequacy
+        var integrationCoverage = AssessIntegrationCoverage(testCaseJson, analysisJson);
+        
+        // Evaluate error handling scenario completeness
+        var errorHandlingCompleteness = AssessErrorHandlingCompleteness(testCaseJson, analysisJson);
+        
+        var validationNotes = GenerateValidationNotes(
+            testCaseCompleteness, edgeCaseAccuracy, businessLogicDepth, 
+            integrationCoverage, errorHandlingCompleteness);
+
+        return new LLMValidationResult
+        {
+            TestCaseCompleteness = testCaseCompleteness,
+            EdgeCaseAccuracy = edgeCaseAccuracy,
+            BusinessLogicDepth = businessLogicDepth,
+            IntegrationCoverage = integrationCoverage,
+            ErrorHandlingCompleteness = errorHandlingCompleteness,
+            ValidationNotes = validationNotes
+        };
+    }
+
+    /// <summary>
+    /// Reconciles baseline confidence with LLM validation to produce final score
+    /// </summary>
+    /// <param name="baselineConfidence">Original algorithmic confidence</param>
+    /// <param name="llmValidation">LLM validation results</param>
+    /// <returns>Final confidence score with reasoning</returns>
+    private static FinalConfidenceScore ReconcileConfidenceScores(double baselineConfidence, LLMValidationResult llmValidation)
+    {
+        var llmScore = llmValidation.OverallQuality;
+        var variance = Math.Abs(llmScore - baselineConfidence);
+        
+        // Apply reconciliation logic based on variance and LLM quality
+        double adjustment = 0.0;
+        string reasoning = "";
+        bool requiresReview = false;
+
+        if (variance > 0.20)
+        {
+            // High variance - flag for manual review
+            requiresReview = true;
+            adjustment = -0.05; // Conservative penalty
+            reasoning = $"High variance ({variance:F2}) between baseline ({baselineConfidence:F2}) and LLM validation ({llmScore:F2}) - requires manual review";
+        }
+        else if (llmScore > baselineConfidence)
+        {
+            // LLM validation higher than baseline - boost confidence
+            adjustment = Math.Min(0.10, (llmScore - baselineConfidence) * 0.5);
+            reasoning = $"LLM validation quality ({llmScore:F2}) exceeds baseline ({baselineConfidence:F2}) - confidence boosted by {adjustment:F2}";
+        }
+        else if (llmScore < baselineConfidence)
+        {
+            // LLM validation lower than baseline - reduce confidence
+            adjustment = Math.Max(-0.15, (llmScore - baselineConfidence) * 0.7);
+            reasoning = $"LLM validation quality ({llmScore:F2}) below baseline ({baselineConfidence:F2}) - confidence reduced by {Math.Abs(adjustment):F2}";
+        }
+        else
+        {
+            reasoning = $"LLM validation confirms baseline confidence ({baselineConfidence:F2}) - no adjustment needed";
+        }
+
+        var finalConfidence = Math.Max(0.0, Math.Min(1.0, baselineConfidence + adjustment));
+
+        return new FinalConfidenceScore
+        {
+            BaselineConfidence = baselineConfidence,
+            LLMValidationScore = llmScore,
+            FinalConfidence = Math.Round(finalConfidence, 3),
+            ConfidenceAdjustment = Math.Round(adjustment, 3),
+            AdjustmentReasoning = reasoning,
+            RequiresManualReview = requiresReview
+        };
+    }
+
+    /// <summary>
+    /// Assesses test case completeness against requirements
+    /// </summary>
+    private static double AssessTestCaseCompleteness(string testCaseJson, string analysisJson)
+    {
+        double completeness = 0.5; // Base score
+
+        // Check for essential test case elements
+        if (testCaseJson.Contains("happy_path", StringComparison.OrdinalIgnoreCase)) completeness += 0.15;
+        if (testCaseJson.Contains("error_handling", StringComparison.OrdinalIgnoreCase)) completeness += 0.15;
+        if (testCaseJson.Contains("boundary", StringComparison.OrdinalIgnoreCase)) completeness += 0.10;
+        if (testCaseJson.Contains("acceptance", StringComparison.OrdinalIgnoreCase)) completeness += 0.10;
+
+        // Bonus for detailed steps and expected results
+        var stepCount = CountOccurrences(testCaseJson, "step");
+        var expectedCount = CountOccurrences(testCaseJson, "expected");
+        if (stepCount >= 3 && expectedCount >= 2) completeness += 0.10;
+
+        return Math.Min(1.0, completeness);
+    }
+
+    /// <summary>
+    /// Assesses edge case identification accuracy
+    /// </summary>
+    private static double AssessEdgeCaseAccuracy(string testCaseJson, string analysisJson)
+    {
+        double accuracy = 0.4; // Base score
+
+        // Check for edge case indicators
+        if (testCaseJson.Contains("edge", StringComparison.OrdinalIgnoreCase)) accuracy += 0.20;
+        if (testCaseJson.Contains("boundary", StringComparison.OrdinalIgnoreCase)) accuracy += 0.15;
+        if (testCaseJson.Contains("limit", StringComparison.OrdinalIgnoreCase)) accuracy += 0.10;
+        if (testCaseJson.Contains("minimum", StringComparison.OrdinalIgnoreCase) || 
+            testCaseJson.Contains("maximum", StringComparison.OrdinalIgnoreCase)) accuracy += 0.15;
+
+        return Math.Min(1.0, accuracy);
+    }
+
+    /// <summary>
+    /// Assesses business logic validation depth
+    /// </summary>
+    private static double AssessBusinessLogicDepth(string testCaseJson, string analysisJson)
+    {
+        double depth = 0.3; // Base score
+
+        // Check for business logic coverage
+        if (testCaseJson.Contains("validation", StringComparison.OrdinalIgnoreCase)) depth += 0.20;
+        if (testCaseJson.Contains("rule", StringComparison.OrdinalIgnoreCase)) depth += 0.15;
+        if (testCaseJson.Contains("condition", StringComparison.OrdinalIgnoreCase)) depth += 0.15;
+        if (testCaseJson.Contains("workflow", StringComparison.OrdinalIgnoreCase)) depth += 0.10;
+        if (testCaseJson.Contains("logic", StringComparison.OrdinalIgnoreCase)) depth += 0.10;
+
+        return Math.Min(1.0, depth);
+    }
+
+    /// <summary>
+    /// Assesses integration testing coverage
+    /// </summary>
+    private static double AssessIntegrationCoverage(string testCaseJson, string analysisJson)
+    {
+        double coverage = 0.5; // Base score
+
+        // Check for integration test indicators
+        if (testCaseJson.Contains("integration", StringComparison.OrdinalIgnoreCase)) coverage += 0.20;
+        if (testCaseJson.Contains("api", StringComparison.OrdinalIgnoreCase)) coverage += 0.15;
+        if (testCaseJson.Contains("service", StringComparison.OrdinalIgnoreCase)) coverage += 0.10;
+        if (testCaseJson.Contains("database", StringComparison.OrdinalIgnoreCase)) coverage += 0.05;
+
+        return Math.Min(1.0, coverage);
+    }
+
+    /// <summary>
+    /// Assesses error handling scenario completeness
+    /// </summary>
+    private static double AssessErrorHandlingCompleteness(string testCaseJson, string analysisJson)
+    {
+        double completeness = 0.3; // Base score
+
+        // Check for error handling coverage
+        if (testCaseJson.Contains("error", StringComparison.OrdinalIgnoreCase)) completeness += 0.25;
+        if (testCaseJson.Contains("exception", StringComparison.OrdinalIgnoreCase)) completeness += 0.15;
+        if (testCaseJson.Contains("invalid", StringComparison.OrdinalIgnoreCase)) completeness += 0.15;
+        if (testCaseJson.Contains("timeout", StringComparison.OrdinalIgnoreCase)) completeness += 0.10;
+        if (testCaseJson.Contains("failure", StringComparison.OrdinalIgnoreCase)) completeness += 0.05;
+
+        return Math.Min(1.0, completeness);
+    }
+
+    /// <summary>
+    /// Generates validation notes based on assessment results
+    /// </summary>
+    private static List<string> GenerateValidationNotes(
+        double completeness, double edgeCase, double businessLogic, 
+        double integration, double errorHandling)
+    {
+        var notes = new List<string>();
+
+        if (completeness >= 0.8) notes.Add("Excellent test case completeness");
+        else if (completeness < 0.5) notes.Add("Test case completeness needs improvement");
+
+        if (edgeCase >= 0.7) notes.Add("Good edge case coverage");
+        else if (edgeCase < 0.5) notes.Add("Edge case identification could be enhanced");
+
+        if (businessLogic >= 0.7) notes.Add("Strong business logic validation");
+        else if (businessLogic < 0.5) notes.Add("Business logic testing needs more depth");
+
+        if (integration >= 0.7) notes.Add("Adequate integration testing coverage");
+        else if (integration < 0.4) notes.Add("Integration testing coverage is minimal");
+
+        if (errorHandling >= 0.7) notes.Add("Comprehensive error handling scenarios");
+        else if (errorHandling < 0.5) notes.Add("Error handling scenarios need expansion");
+
+        return notes;
+    }
+
+    /// <summary>
+    /// Counts occurrences of a substring in a string (case-insensitive)
+    /// </summary>
+    private static int CountOccurrences(string text, string substring)
+    {
+        if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(substring))
+            return 0;
+
+        int count = 0;
+        int index = 0;
+        while ((index = text.IndexOf(substring, index, StringComparison.OrdinalIgnoreCase)) != -1)
+        {
+            count++;
+            index += substring.Length;
+        }
+        return count;
     }
 
     #endregion
