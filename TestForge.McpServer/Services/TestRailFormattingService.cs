@@ -28,7 +28,7 @@ public class TestRailFormattingService : ITestRailFormattingService
     /// </summary>
     /// <param name="testSuite">The enhanced test suite to format</param>
     /// <returns>Formatted TestRail output string</returns>
-    public async Task<string> FormatEnhancedTestSuite(EnhancedTestSuite testSuite)
+    public Task<string> FormatEnhancedTestSuite(EnhancedTestSuite testSuite)
     {
         var output = new StringBuilder();
         
@@ -126,7 +126,7 @@ public class TestRailFormattingService : ITestRailFormattingService
         output.AppendLine("=== COMPREHENSIVE TEST GENERATION COMPLETE ===");
         output.AppendLine($"Generated {testSuite.TotalTestCount} test cases with {testSuite.CoverageSummary.CoveragePercentage:F1}% coverage");
         
-        return output.ToString();
+        return Task.FromResult(output.ToString());
     }
 
     /// <summary>

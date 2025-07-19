@@ -179,17 +179,17 @@ public static class UiComponentAnalysisService
             "Validate ARIA labels and roles"
         };
         
-        if (components.Any(c => c.ToString().Contains("form")))
+        if (components.Any(c => c?.ToString()?.Contains("form") == true))
         {
             considerations.Add("Verify form labels and field associations");
         }
         
-        if (components.Any(c => c.ToString().Contains("modal")))
+        if (components.Any(c => c?.ToString()?.Contains("modal") == true))
         {
             considerations.Add("Test modal focus management and escape functionality");
         }
         
-        if (components.Any(c => c.ToString().Contains("table")))
+        if (components.Any(c => c?.ToString()?.Contains("table") == true))
         {
             considerations.Add("Verify table headers and data relationships");
         }

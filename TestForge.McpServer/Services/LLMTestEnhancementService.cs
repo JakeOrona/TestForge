@@ -985,7 +985,7 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
         return scenarios;
     }
 
-    private async Task<TestCoverageMatrix> GenerateCoverageMatrix(ParsedJiraData data)
+    private Task<TestCoverageMatrix> GenerateCoverageMatrix(ParsedJiraData data)
     {
         var matrix = new TestCoverageMatrix();
 
@@ -1017,7 +1017,7 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
             };
         }
 
-        return matrix;
+        return Task.FromResult(matrix);
     }
 
     private List<string> ExtractUserRoles(string description)

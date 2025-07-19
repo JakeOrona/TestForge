@@ -346,9 +346,9 @@ public static class BusinessLogicAnalysisService
     /// <returns>Complexity analysis</returns>
     private static object AnalyzeComplexity(List<object> businessLogic)
     {
-        var highRisk = businessLogic.Count(rule => rule.ToString().Contains("high"));
-        var mediumRisk = businessLogic.Count(rule => rule.ToString().Contains("medium"));
-        var lowRisk = businessLogic.Count(rule => rule.ToString().Contains("low"));
+        var highRisk = businessLogic.Count(rule => rule?.ToString()?.Contains("high") == true);
+        var mediumRisk = businessLogic.Count(rule => rule?.ToString()?.Contains("medium") == true);
+        var lowRisk = businessLogic.Count(rule => rule?.ToString()?.Contains("low") == true);
         
         var overallComplexity = highRisk > 0 ? "high" : 
                                mediumRisk > 0 ? "medium" : 
@@ -380,17 +380,17 @@ public static class BusinessLogicAnalysisService
             "Validate business rule interactions and dependencies"
         };
         
-        if (businessLogic.Any(rule => rule.ToString().Contains("validation")))
+        if (businessLogic.Any(rule => rule?.ToString()?.Contains("validation") == true))
         {
             scenarios.Add("Comprehensive validation testing with various input combinations");
         }
         
-        if (businessLogic.Any(rule => rule.ToString().Contains("workflow")))
+        if (businessLogic.Any(rule => rule?.ToString()?.Contains("workflow") == true))
         {
             scenarios.Add("End-to-end workflow testing with different paths");
         }
         
-        if (businessLogic.Any(rule => rule.ToString().Contains("security")))
+        if (businessLogic.Any(rule => rule?.ToString()?.Contains("security") == true))
         {
             scenarios.Add("Security testing with unauthorized access attempts");
         }
@@ -407,22 +407,22 @@ public static class BusinessLogicAnalysisService
     {
         var risks = new List<string>();
         
-        if (businessLogic.Any(rule => rule.ToString().Contains("calculation")))
+        if (businessLogic.Any(rule => rule?.ToString()?.Contains("calculation") == true))
         {
             risks.Add("Financial calculation errors could have significant impact");
         }
         
-        if (businessLogic.Any(rule => rule.ToString().Contains("security")))
+        if (businessLogic.Any(rule => rule?.ToString()?.Contains("security") == true))
         {
             risks.Add("Security vulnerabilities could lead to data breaches");
         }
         
-        if (businessLogic.Any(rule => rule.ToString().Contains("workflow")))
+        if (businessLogic.Any(rule => rule?.ToString()?.Contains("workflow") == true))
         {
             risks.Add("Workflow failures could disrupt business processes");
         }
         
-        if (businessLogic.Any(rule => rule.ToString().Contains("data_integrity")))
+        if (businessLogic.Any(rule => rule?.ToString()?.Contains("data_integrity") == true))
         {
             risks.Add("Data integrity issues could compromise system reliability");
         }
@@ -462,12 +462,12 @@ public static class BusinessLogicAnalysisService
             "End-to-end testing for complete workflows"
         };
         
-        if (businessLogic.Any(rule => rule.ToString().Contains("security")))
+        if (businessLogic.Any(rule => rule?.ToString()?.Contains("security") == true))
         {
             strategies.Add("Security testing with penetration testing");
         }
         
-        if (businessLogic.Any(rule => rule.ToString().Contains("performance")))
+        if (businessLogic.Any(rule => rule?.ToString()?.Contains("performance") == true))
         {
             strategies.Add("Performance testing under load");
         }
