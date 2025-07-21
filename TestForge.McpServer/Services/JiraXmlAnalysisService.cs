@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using HtmlAgilityPack;
+using Microsoft.Extensions.Logging;
 using TestForge.McpServer.Models;
 
 namespace TestForge.McpServer.Services;
@@ -11,21 +13,59 @@ namespace TestForge.McpServer.Services;
 /// </summary>
 public static class JiraXmlAnalysisService
 {
+    // Logger for observability and debugging
+    private static ILogger? _logger;
+
+    /// <summary>
+    /// Initialize the service with logger for structured logging
+    /// </summary>
+    /// <param name="logger">Logger instance for structured logging</param>
+    public static void Initialize(ILogger? logger) => _logger = logger;
     /// <summary>
     /// Analyzes raw Jira XML and returns structured data optimized for LLM enhancement
     /// </summary>
     /// <param name="jiraXml">The raw Jira XML content to analyze</param>
+    /// <param name="logger">Optional logger for this operation (overrides static logger)</param>
     /// <returns>Comprehensive JSON analysis including UI components, business logic, complexity scoring, and LLM guidance</returns>
-    public static string AnalyzeForLLM(string jiraXml)
+    public static string AnalyzeForLLM(string jiraXml, ILogger? logger = null)
     {
+        var operationLogger = logger ?? _logger;
+        var startTime = DateTime.UtcNow;
+        var xmlSize = jiraXml?.Length ?? 0;
+        var correlationId = Guid.NewGuid().ToString("N")[..8];
+        
+        using var scope = operationLogger?.BeginScope(new Dictionary<string, object>
+        {
+            ["CorrelationId"] = correlationId,
+            ["XmlSize"] = xmlSize,
+            ["Operation"] = "JiraXmlAnalysis"
+        });
+        
+        operationLogger?.LogInformation("Starting Jira XML analysis {@Metrics}", new { xmlSize, correlationId });
+        
         try
         {
             // Input validation
             if (string.IsNullOrWhiteSpace(jiraXml))
             {
+                operationLogger?.LogWarning("Empty XML input provided {@Context}", new { correlationId });
                 return JsonSerializer.Serialize(new { error = "Jira XML content is required" });
             }
 
+            // Security monitoring - check for unusually large payloads
+            if (xmlSize > 10_000_000) // 10MB limit
+            {
+                operationLogger?.LogWarning("Unusually large XML detected {@SecurityMetrics}", new 
+                { 
+                    xmlSize, 
+                    potentialThreat = "Large payload analysis",
+                    correlationId
+                });
+            }
+
+            operationLogger?.LogDebug("Step 1: Validating and cleaning XML {@Context}", new { correlationId, step = "validation" });
+            var validationStopwatch = Stopwatch.StartNew();
+            
             // Step 1: Validate and clean XML
             var validation = JiraXmlValidationService.Validate(jiraXml);
             string cleanXml = jiraXml;
@@ -34,16 +74,40 @@ public static class JiraXmlAnalysisService
             var validationObj = JsonSerializer.Deserialize<dynamic>(validation);
             bool isValid = validationObj?.GetProperty("isValid").GetBoolean() ?? false;
             
+            validationStopwatch.Stop();
+            operationLogger?.LogDebug("XML validation completed {@ValidationResult}", new 
+            { 
+                isValid, 
+                durationMs = validationStopwatch.ElapsedMilliseconds,
+                correlationId 
+            });
+            
             if (!isValid)
             {
+                operationLogger?.LogWarning("XML validation failed, attempting cleaning {@ValidationContext}", 
+                    new { correlationId });
+                    
+                var cleanStopwatch = Stopwatch.StartNew();
                 var cleanResult = JiraXmlCleaningService.Clean(jiraXml);
                 var cleanObj = JsonSerializer.Deserialize<dynamic>(cleanResult);
+                cleanStopwatch.Stop();
+                
                 if (cleanObj?.GetProperty("success").GetBoolean() == true)
                 {
                     cleanXml = cleanObj.GetProperty("cleanedXml").GetString() ?? jiraXml;
+                    operationLogger?.LogInformation("XML cleaning successful {@CleaningResult}", 
+                        new { 
+                            correlationId, 
+                            originalSize = jiraXml.Length, 
+                            cleanedSize = cleanXml.Length,
+                            durationMs = cleanStopwatch.ElapsedMilliseconds
+                        });
                 }
                 else
                 {
+                    operationLogger?.LogError("XML validation and cleaning both failed {@CleaningContext}", 
+                        new { correlationId, cleaningDurationMs = cleanStopwatch.ElapsedMilliseconds });
+                        
                     return JsonSerializer.Serialize(new { 
                         error = "XML validation failed and cleaning was unsuccessful",
                         suggestion = "Try using validate_jira_xml or clean_jira_xml tools first"
@@ -51,11 +115,22 @@ public static class JiraXmlAnalysisService
                 }
             }
 
+            operationLogger?.LogDebug("Step 2: Parsing XML to extract ticket fields {@Context}", new { correlationId, step = "parsing" });
+            var parseStopwatch = Stopwatch.StartNew();
+            
             // Step 2: Parse XML to extract ticket fields
-            var parseResult = JiraStoryParsingService.ParseJiraXml(cleanXml);
+            var parseResult = JiraStoryParsingService.ParseJiraXml(cleanXml, operationLogger);
+            parseStopwatch.Stop();
             
             if (!parseResult.IsSuccess || parseResult.Story == null)
             {
+                operationLogger?.LogError("XML parsing failed {@ParsingContext}", new 
+                { 
+                    correlationId, 
+                    error = parseResult.ErrorMessage,
+                    durationMs = parseStopwatch.ElapsedMilliseconds
+                });
+                
                 return JsonSerializer.Serialize(new { 
                     error = $"Failed to parse Jira XML: {parseResult.ErrorMessage}",
                     suggestion = "Try using validate_jira_xml or clean_jira_xml tools first"
@@ -63,14 +138,49 @@ public static class JiraXmlAnalysisService
             }
 
             var story = parseResult.Story;
+            operationLogger?.LogDebug("XML parsing successful {@ParsingResult}", new 
+            { 
+                correlationId,
+                issueKey = story.IssueKey,
+                hasDescription = !string.IsNullOrEmpty(story.Description),
+                acceptanceCriteriaCount = story.AcceptanceCriteria.Count,
+                commentsCount = story.Comments.Count,
+                durationMs = parseStopwatch.ElapsedMilliseconds
+            });
+            
+            operationLogger?.LogDebug("Step 3: Analyzing UI components and business logic {@Context}", new { correlationId, step = "analysis" });
+            var analysisStopwatch = Stopwatch.StartNew();
             
             // Step 3: Analyze description for UI components and business logic
             var description = story.Description;
-            var uiComponentsAnalysis = AnalyzeUIComponents(description);
-            var businessLogicAnalysis = AnalyzeBusinessLogic(description);
+            var uiComponentsAnalysis = AnalyzeUIComponents(description, operationLogger, correlationId);
+            var businessLogicAnalysis = AnalyzeBusinessLogic(description, operationLogger, correlationId);
+            
+            analysisStopwatch.Stop();
+            operationLogger?.LogDebug("Component analysis completed {@AnalysisResult}", new 
+            { 
+                correlationId,
+                uiComponentCount = (uiComponentsAnalysis as IEnumerable<object>)?.Count() ?? 0,
+                businessLogicCount = (businessLogicAnalysis as IEnumerable<object>)?.Count() ?? 0,
+                durationMs = analysisStopwatch.ElapsedMilliseconds
+            });
+            
+            operationLogger?.LogDebug("Step 4: Calculating complexity score {@Context}", new { correlationId, step = "complexity" });
+            var complexityStopwatch = Stopwatch.StartNew();
             
             // Step 4: Generate complexity scoring
-            var complexityScore = CalculateComplexityScore(story, uiComponentsAnalysis, businessLogicAnalysis);
+            var complexityScore = CalculateComplexityScore(story, uiComponentsAnalysis, businessLogicAnalysis, operationLogger, correlationId);
+            complexityStopwatch.Stop();
+            
+            operationLogger?.LogDebug("Complexity calculation completed {@ComplexityResult}", new 
+            { 
+                correlationId,
+                complexityScore,
+                durationMs = complexityStopwatch.ElapsedMilliseconds
+            });
+            
+            operationLogger?.LogDebug("Step 5: Creating structured analysis {@Context}", new { correlationId, step = "structuring" });
+            var structuringStopwatch = Stopwatch.StartNew();
             
             // Step 5: Create structured analysis for LLM processing
             var analysis = new
@@ -102,27 +212,27 @@ public static class JiraXmlAnalysisService
                     overallScore = complexityScore,
                     uiComponents = uiComponentsAnalysis,
                     businessLogic = businessLogicAnalysis,
-                    integrationPoints = IdentifyIntegrationPoints(description),
-                    testingComplexity = AssessTestingComplexity(story.IssueType, description)
+                    integrationPoints = IdentifyIntegrationPoints(description, operationLogger, correlationId),
+                    testingComplexity = AssessTestingComplexity(story.IssueType, description, operationLogger, correlationId)
                 },
                 suggestedTestAreas = new
                 {
-                    functional = GenerateFunctionalTestAreas(story),
-                    ui = ExtractUITestAreas(description),
-                    integration = ExtractIntegrationTestAreas(description),
-                    security = IdentifySecurityTestAreas(description),
-                    performance = IdentifyPerformanceTestAreas(description)
+                    functional = GenerateFunctionalTestAreas(story, operationLogger, correlationId),
+                    ui = ExtractUITestAreas(description, operationLogger, correlationId),
+                    integration = ExtractIntegrationTestAreas(description, operationLogger, correlationId),
+                    security = IdentifySecurityTestAreas(description, operationLogger, correlationId),
+                    performance = IdentifyPerformanceTestAreas(description, operationLogger, correlationId)
                 },
-                baselineTestCases = GenerateBaselineTestCases(story),
-                commentsAnalysis = AnalyzeComments(story.Comments),
-                executiveSummary = CalculateExecutiveSummaryConfidence(story, isValid, uiComponentsAnalysis, businessLogicAnalysis, complexityScore),
+                baselineTestCases = GenerateBaselineTestCases(story, operationLogger, correlationId),
+                commentsAnalysis = AnalyzeComments(story.Comments, operationLogger, correlationId),
+                executiveSummary = CalculateExecutiveSummaryConfidence(story, isValid, uiComponentsAnalysis, businessLogicAnalysis, complexityScore, operationLogger, correlationId),
                 llmGuidance = new
                 {
-                    focusAreas = DetermineFocusAreas(story, complexityScore),
-                    suggestedPrompts = GenerateLLMPrompts(story),
+                    focusAreas = DetermineFocusAreas(story, complexityScore, operationLogger, correlationId),
+                    suggestedPrompts = GenerateLLMPrompts(story, operationLogger, correlationId),
                     complexityScore = complexityScore,
-                    testingStrategy = DetermineTestingStrategy(story.IssueType, complexityScore),
-                    confidence = CalculateAnalysisConfidence(story, isValid)
+                    testingStrategy = DetermineTestingStrategy(story.IssueType, complexityScore, operationLogger, correlationId),
+                    confidence = CalculateAnalysisConfidence(story, isValid, operationLogger, correlationId)
                 },
                 xmlProcessing = new
                 {
@@ -139,10 +249,62 @@ public static class JiraXmlAnalysisService
                 }
             };
             
+            structuringStopwatch.Stop();
+            var processingTime = DateTime.UtcNow - startTime;
+            
+            operationLogger?.LogInformation("Completed Jira XML analysis {@Result}", new 
+            { 
+                success = true, 
+                processingTimeMs = processingTime.TotalMilliseconds,
+                issueKey = story?.IssueKey,
+                correlationId,
+                wasXmlCleaned = !isValid,
+                complexityScore,
+                uiComponentCount = (uiComponentsAnalysis as IEnumerable<object>)?.Count() ?? 0,
+                businessLogicCount = (businessLogicAnalysis as IEnumerable<object>)?.Count() ?? 0,
+                customFieldCount = story?.CustomFields?.Count ?? 0,
+                commentCount = story?.Comments?.Count ?? 0,
+                acceptanceCriteriaCount = story?.AcceptanceCriteria?.Count ?? 0,
+                stepTimings = new
+                {
+                    validationMs = validationStopwatch.ElapsedMilliseconds,
+                    parsingMs = parseStopwatch.ElapsedMilliseconds,
+                    analysisMs = analysisStopwatch.ElapsedMilliseconds,
+                    complexityMs = complexityStopwatch.ElapsedMilliseconds,
+                    structuringMs = structuringStopwatch.ElapsedMilliseconds
+                }
+            });
+            
             return JsonSerializer.Serialize(analysis, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (JsonException jsonEx)
+        {
+            var processingTime = DateTime.UtcNow - startTime;
+            operationLogger?.LogError("JSON processing failed during analysis {@ErrorContext}", new 
+            { 
+                correlationId,
+                error = jsonEx.Message,
+                processingTimeMs = processingTime.TotalMilliseconds,
+                xmlSize
+            });
+            
+            return JsonSerializer.Serialize(new { 
+                error = $"JSON processing failed: {jsonEx.Message}",
+                suggestion = "Ensure XML contains valid JSON structures for processing"
+            });
         }
         catch (Exception ex)
         {
+            var processingTime = DateTime.UtcNow - startTime;
+            operationLogger?.LogError("Analysis failed with unexpected error {@ErrorContext}", new 
+            { 
+                correlationId,
+                error = ex.Message,
+                stackTrace = ex.StackTrace,
+                processingTimeMs = processingTime.TotalMilliseconds,
+                xmlSize
+            });
+            
             return JsonSerializer.Serialize(new { 
                 error = $"Analysis failed: {ex.Message}",
                 suggestion = "Ensure XML is valid Jira export format. Try validate_jira_xml tool first."
@@ -154,36 +316,59 @@ public static class JiraXmlAnalysisService
     /// Analyzes UI components in the description text
     /// </summary>
     /// <param name="description">The description text to analyze</param>
+    /// <param name="logger">Logger for performance tracking</param>
+    /// <param name="correlationId">Correlation ID for tracing</param>
     /// <returns>UI components analysis result</returns>
-    private static object AnalyzeUIComponents(string description)
+    private static object AnalyzeUIComponents(string description, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
         var components = new List<object>();
+        
+        logger?.LogDebug("Starting UI components analysis {@Context}", new { correlationId, step = "ui_analysis" });
         
         if (!string.IsNullOrWhiteSpace(description))
         {
             var lowerDesc = description.ToLower();
+            var componentsFound = 0;
             
             if (lowerDesc.Contains("input") || lowerDesc.Contains("field"))
             {
                 components.Add(new { type = "input", name = "input_field", complexity = "medium", testAreas = new[] { "validation", "formatting" }, confidence = 0.8 });
+                componentsFound++;
             }
             
             if (lowerDesc.Contains("button") || lowerDesc.Contains("click"))
             {
                 components.Add(new { type = "button", name = "button_element", complexity = "low", testAreas = new[] { "interaction", "state" }, confidence = 0.85 });
+                componentsFound++;
             }
             
             if (lowerDesc.Contains("modal") || lowerDesc.Contains("dialog"))
             {
                 components.Add(new { type = "modal", name = "modal_dialog", complexity = "high", testAreas = new[] { "display", "interaction", "close" }, confidence = 0.9 });
+                componentsFound++;
             }
             
             if (lowerDesc.Contains("form"))
             {
                 components.Add(new { type = "form", name = "form_element", complexity = "high", testAreas = new[] { "validation", "submission" }, confidence = 0.88 });
+                componentsFound++;
             }
+            
+            logger?.LogDebug("UI components analysis completed {@AnalysisResult}", new 
+            { 
+                componentsFound,
+                componentTypes = components.Select(c => ((dynamic)c).type).ToArray(),
+                durationMs = stopwatch.ElapsedMilliseconds,
+                correlationId 
+            });
+        }
+        else
+        {
+            logger?.LogDebug("No description provided for UI analysis {@Context}", new { correlationId });
         }
         
+        stopwatch.Stop();
         return components;
     }
 
@@ -191,36 +376,60 @@ public static class JiraXmlAnalysisService
     /// Analyzes business logic in the description text
     /// </summary>
     /// <param name="description">The description text to analyze</param>
+    /// <param name="logger">Logger for performance tracking</param>
+    /// <param name="correlationId">Correlation ID for tracing</param>
     /// <returns>Business logic analysis result</returns>
-    private static object AnalyzeBusinessLogic(string description)
+    private static object AnalyzeBusinessLogic(string description, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
         var businessLogic = new List<object>();
+        
+        logger?.LogDebug("Starting business logic analysis {@Context}", new { correlationId, step = "business_logic_analysis" });
         
         if (!string.IsNullOrWhiteSpace(description))
         {
             var lowerDesc = description.ToLower();
+            var rulesFound = 0;
             
             if (lowerDesc.Contains("validation") || lowerDesc.Contains("validate"))
             {
                 businessLogic.Add(new { rule = "validation", description = "Input validation logic", confidence = 0.9, testScenarios = new[] { "valid input", "invalid input" } });
+                rulesFound++;
             }
             
             if (lowerDesc.Contains("required") || lowerDesc.Contains("mandatory"))
             {
                 businessLogic.Add(new { rule = "required_field", description = "Required field logic", confidence = 0.85, testScenarios = new[] { "missing required", "present required" } });
+                rulesFound++;
             }
             
             if (lowerDesc.Contains("minimum") || lowerDesc.Contains("maximum"))
             {
                 businessLogic.Add(new { rule = "min_max_validation", description = "Minimum/maximum value validation", confidence = 0.95, testScenarios = new[] { "below minimum", "above maximum", "within range" } });
+                rulesFound++;
             }
             
             if (lowerDesc.Contains("override") || lowerDesc.Contains("inherit"))
             {
                 businessLogic.Add(new { rule = "inheritance", description = "Override and inheritance logic", confidence = 0.88, testScenarios = new[] { "override behavior", "inheritance rules" } });
+                rulesFound++;
             }
+            
+            logger?.LogDebug("Business logic analysis completed {@AnalysisResult}", new 
+            { 
+                rulesFound,
+                ruleTypes = businessLogic.Select(b => ((dynamic)b).rule).ToArray(),
+                averageConfidence = businessLogic.Any() ? businessLogic.Average(b => ((dynamic)b).confidence) : 0.0,
+                durationMs = stopwatch.ElapsedMilliseconds,
+                correlationId 
+            });
+        }
+        else
+        {
+            logger?.LogDebug("No description provided for business logic analysis {@Context}", new { correlationId });
         }
         
+        stopwatch.Stop();
         return businessLogic;
     }
 
@@ -230,37 +439,81 @@ public static class JiraXmlAnalysisService
     /// <param name="story">The Jira story data</param>
     /// <param name="uiComponents">UI components analysis</param>
     /// <param name="businessLogic">Business logic analysis</param>
+    /// <param name="logger">Logger for performance tracking</param>
+    /// <param name="correlationId">Correlation ID for tracing</param>
     /// <returns>Complexity score (1-10)</returns>
-    private static double CalculateComplexityScore(JiraStory story, object uiComponents, object businessLogic)
+    private static double CalculateComplexityScore(JiraStory story, object uiComponents, object businessLogic, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
         double score = 3.0; // Base score
+        var scoreBreakdown = new Dictionary<string, double> { ["base"] = 3.0 };
+        
+        logger?.LogDebug("Starting complexity score calculation {@Context}", new { correlationId, step = "complexity_calculation" });
         
         // Story points influence
         if (int.TryParse(story.StoryPoints, out int points))
         {
-            score += points * 0.5;
+            var pointsContribution = points * 0.5;
+            score += pointsContribution;
+            scoreBreakdown["storyPoints"] = pointsContribution;
         }
         
         // Description complexity
         if (!string.IsNullOrEmpty(story.Description))
         {
-            score += Math.Min(story.Description.Length / 500.0, 2.0);
+            var descriptionContribution = Math.Min(story.Description.Length / 500.0, 2.0);
+            score += descriptionContribution;
+            scoreBreakdown["description"] = descriptionContribution;
         }
         
         // Acceptance criteria count
-        score += story.AcceptanceCriteria.Count * 0.3;
+        var criteriaContribution = story.AcceptanceCriteria.Count * 0.3;
+        score += criteriaContribution;
+        scoreBreakdown["acceptanceCriteria"] = criteriaContribution;
+        
+        // UI components complexity
+        var uiList = uiComponents as IEnumerable<object>;
+        if (uiList != null && uiList.Any())
+        {
+            var uiContribution = uiList.Count() * 0.2;
+            score += uiContribution;
+            scoreBreakdown["uiComponents"] = uiContribution;
+        }
+        
+        // Business logic complexity
+        var businessList = businessLogic as IEnumerable<object>;
+        if (businessList != null && businessList.Any())
+        {
+            var businessContribution = businessList.Count() * 0.25;
+            score += businessContribution;
+            scoreBreakdown["businessLogic"] = businessContribution;
+        }
         
         // Cap at 10
-        return Math.Min(score, 10.0);
+        var finalScore = Math.Min(score, 10.0);
+        stopwatch.Stop();
+        
+        logger?.LogDebug("Complexity score calculation completed {@ComplexityResult}", new 
+        { 
+            finalScore = Math.Round(finalScore, 2),
+            scoreBreakdown = scoreBreakdown.ToDictionary(kvp => kvp.Key, kvp => Math.Round(kvp.Value, 2)),
+            durationMs = stopwatch.ElapsedMilliseconds,
+            correlationId 
+        });
+        
+        return finalScore;
     }
 
     /// <summary>
     /// Identifies integration points in the description
     /// </summary>
     /// <param name="description">The description text to analyze</param>
+    /// <param name="logger">Logger for performance tracking</param>
+    /// <param name="correlationId">Correlation ID for tracing</param>
     /// <returns>Integration points analysis</returns>
-    private static string[] IdentifyIntegrationPoints(string description)
+    private static string[] IdentifyIntegrationPoints(string description, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
         var integrationPoints = new List<string>();
         
         if (!string.IsNullOrWhiteSpace(description))
@@ -277,6 +530,15 @@ public static class JiraXmlAnalysisService
                 integrationPoints.Add("Authentication service");
         }
         
+        stopwatch.Stop();
+        logger?.LogDebug("Integration points identification completed {@IntegrationResult}", new 
+        { 
+            pointsFound = integrationPoints.Count,
+            points = integrationPoints.ToArray(),
+            durationMs = stopwatch.ElapsedMilliseconds,
+            correlationId 
+        });
+        
         return integrationPoints.ToArray();
     }
 
@@ -285,9 +547,13 @@ public static class JiraXmlAnalysisService
     /// </summary>
     /// <param name="issueType">The issue type</param>
     /// <param name="description">The description text</param>
+    /// <param name="logger">Logger for performance tracking</param>
+    /// <param name="correlationId">Correlation ID for tracing</param>
     /// <returns>Testing complexity assessment</returns>
-    private static string AssessTestingComplexity(string issueType, string description)
+    private static string AssessTestingComplexity(string issueType, string description, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
+        
         var complexity = issueType?.ToLower() switch
         {
             "epic" => "High - requires comprehensive testing across multiple features",
@@ -297,6 +563,15 @@ public static class JiraXmlAnalysisService
             _ => "Medium - standard functional testing"
         };
         
+        stopwatch.Stop();
+        logger?.LogDebug("Testing complexity assessment completed {@ComplexityResult}", new 
+        { 
+            issueType,
+            complexity,
+            durationMs = stopwatch.ElapsedMilliseconds,
+            correlationId 
+        });
+        
         return complexity;
     }
 
@@ -304,9 +579,12 @@ public static class JiraXmlAnalysisService
     /// Generates functional test areas based on story content
     /// </summary>
     /// <param name="story">The Jira story data</param>
+    /// <param name="logger">Logger for performance tracking</param>
+    /// <param name="correlationId">Correlation ID for tracing</param>
     /// <returns>Functional test areas</returns>
-    private static string[] GenerateFunctionalTestAreas(JiraStory story)
+    private static string[] GenerateFunctionalTestAreas(JiraStory story, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
         var testAreas = new List<string> { "Basic functionality", "Error handling" };
         
         if (story.AcceptanceCriteria.Any())
@@ -315,6 +593,15 @@ public static class JiraXmlAnalysisService
         if (!string.IsNullOrEmpty(story.Description))
             testAreas.Add("Requirements verification");
         
+        stopwatch.Stop();
+        logger?.LogDebug("Functional test areas generation completed {@TestAreasResult}", new 
+        { 
+            areasCount = testAreas.Count,
+            areas = testAreas.ToArray(),
+            durationMs = stopwatch.ElapsedMilliseconds,
+            correlationId 
+        });
+        
         return testAreas.ToArray();
     }
 
@@ -322,9 +609,12 @@ public static class JiraXmlAnalysisService
     /// Extracts UI test areas from description
     /// </summary>
     /// <param name="description">The description text</param>
+    /// <param name="logger">Logger for performance tracking</param>
+    /// <param name="correlationId">Correlation ID for tracing</param>
     /// <returns>UI test areas</returns>
-    private static string[] ExtractUITestAreas(string description)
+    private static string[] ExtractUITestAreas(string description, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
         var testAreas = new List<string>();
         
         if (!string.IsNullOrWhiteSpace(description))
@@ -341,6 +631,15 @@ public static class JiraXmlAnalysisService
                 testAreas.Add("Modal behavior");
         }
         
+        stopwatch.Stop();
+        logger?.LogDebug("UI test areas extraction completed {@UITestAreasResult}", new 
+        { 
+            areasCount = testAreas.Count,
+            areas = testAreas.ToArray(),
+            durationMs = stopwatch.ElapsedMilliseconds,
+            correlationId 
+        });
+        
         return testAreas.ToArray();
     }
 
@@ -348,9 +647,12 @@ public static class JiraXmlAnalysisService
     /// Extracts integration test areas from description
     /// </summary>
     /// <param name="description">The description text</param>
+    /// <param name="logger">Logger for performance tracking</param>
+    /// <param name="correlationId">Correlation ID for tracing</param>
     /// <returns>Integration test areas</returns>
-    private static string[] ExtractIntegrationTestAreas(string description)
+    private static string[] ExtractIntegrationTestAreas(string description, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
         var testAreas = new List<string>();
         
         if (!string.IsNullOrWhiteSpace(description))
@@ -367,6 +669,15 @@ public static class JiraXmlAnalysisService
                 testAreas.Add("Service integration");
         }
         
+        stopwatch.Stop();
+        logger?.LogDebug("Integration test areas extraction completed {@IntegrationTestAreasResult}", new 
+        { 
+            areasCount = testAreas.Count,
+            areas = testAreas.ToArray(),
+            durationMs = stopwatch.ElapsedMilliseconds,
+            correlationId 
+        });
+        
         return testAreas.ToArray();
     }
 
@@ -374,9 +685,12 @@ public static class JiraXmlAnalysisService
     /// Identifies security test areas from description
     /// </summary>
     /// <param name="description">The description text</param>
+    /// <param name="logger">Logger for performance tracking</param>
+    /// <param name="correlationId">Correlation ID for tracing</param>
     /// <returns>Security test areas</returns>
-    private static string[] IdentifySecurityTestAreas(string description)
+    private static string[] IdentifySecurityTestAreas(string description, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
         var testAreas = new List<string>();
         
         if (!string.IsNullOrWhiteSpace(description))
@@ -393,6 +707,15 @@ public static class JiraXmlAnalysisService
                 testAreas.Add("Input validation security");
         }
         
+        stopwatch.Stop();
+        logger?.LogDebug("Security test areas identification completed {@SecurityTestAreasResult}", new 
+        { 
+            areasCount = testAreas.Count,
+            areas = testAreas.ToArray(),
+            durationMs = stopwatch.ElapsedMilliseconds,
+            correlationId 
+        });
+        
         return testAreas.ToArray();
     }
 
@@ -400,9 +723,12 @@ public static class JiraXmlAnalysisService
     /// Identifies performance test areas from description
     /// </summary>
     /// <param name="description">The description text</param>
+    /// <param name="logger">Logger for performance tracking</param>
+    /// <param name="correlationId">Correlation ID for tracing</param>
     /// <returns>Performance test areas</returns>
-    private static string[] IdentifyPerformanceTestAreas(string description)
+    private static string[] IdentifyPerformanceTestAreas(string description, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
         var testAreas = new List<string>();
         
         if (!string.IsNullOrWhiteSpace(description))
@@ -419,6 +745,15 @@ public static class JiraXmlAnalysisService
                 testAreas.Add("Concurrency testing");
         }
         
+        stopwatch.Stop();
+        logger?.LogDebug("Performance test areas identification completed {@PerformanceTestAreasResult}", new 
+        { 
+            areasCount = testAreas.Count,
+            areas = testAreas.ToArray(),
+            durationMs = stopwatch.ElapsedMilliseconds,
+            correlationId 
+        });
+        
         return testAreas.ToArray();
     }
 
@@ -426,9 +761,12 @@ public static class JiraXmlAnalysisService
     /// Generates baseline test cases from story data
     /// </summary>
     /// <param name="story">The Jira story data</param>
+    /// <param name="logger">Logger for performance tracking</param>
+    /// <param name="correlationId">Correlation ID for tracing</param>
     /// <returns>Baseline test cases</returns>
-    private static object[] GenerateBaselineTestCases(JiraStory story)
+    private static object[] GenerateBaselineTestCases(JiraStory story, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
         var testCases = new List<object>
         {
             new { type = "happy_path", title = "Basic functionality test", confidence = 0.95 },
@@ -440,6 +778,15 @@ public static class JiraXmlAnalysisService
             testCases.Add(new { type = "acceptance_criteria", title = "Acceptance criteria validation", confidence = 0.92 });
         }
         
+        stopwatch.Stop();
+        logger?.LogDebug("Baseline test cases generation completed {@BaselineTestCasesResult}", new 
+        { 
+            testCasesCount = testCases.Count,
+            averageConfidence = testCases.Average(tc => ((dynamic)tc).confidence),
+            durationMs = stopwatch.ElapsedMilliseconds,
+            correlationId 
+        });
+        
         return testCases.ToArray();
     }
 
@@ -448,9 +795,12 @@ public static class JiraXmlAnalysisService
     /// </summary>
     /// <param name="story">The Jira story data</param>
     /// <param name="complexityScore">The complexity score</param>
+    /// <param name="logger">Logger for performance tracking</param>
+    /// <param name="correlationId">Correlation ID for tracing</param>
     /// <returns>Focus areas</returns>
-    private static string[] DetermineFocusAreas(JiraStory story, double complexityScore)
+    private static string[] DetermineFocusAreas(JiraStory story, double complexityScore, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
         var focusAreas = new List<string> { "Functional testing" };
         
         if (complexityScore >= 7.0)
@@ -462,6 +812,16 @@ public static class JiraXmlAnalysisService
         if (!string.IsNullOrEmpty(story.Description))
             focusAreas.Add("Requirements verification");
         
+        stopwatch.Stop();
+        logger?.LogDebug("Focus areas determination completed {@FocusAreasResult}", new 
+        { 
+            areasCount = focusAreas.Count,
+            areas = focusAreas.ToArray(),
+            complexityScore,
+            durationMs = stopwatch.ElapsedMilliseconds,
+            correlationId 
+        });
+        
         return focusAreas.ToArray();
     }
 
@@ -469,9 +829,12 @@ public static class JiraXmlAnalysisService
     /// Generates LLM prompts based on story data
     /// </summary>
     /// <param name="story">The Jira story data</param>
+    /// <param name="logger">Logger for performance tracking</param>
+    /// <param name="correlationId">Correlation ID for tracing</param>
     /// <returns>LLM prompts</returns>
-    private static string[] GenerateLLMPrompts(JiraStory story)
+    private static string[] GenerateLLMPrompts(JiraStory story, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
         var prompts = new List<string>
         {
             "Generate comprehensive test scenarios covering positive and negative cases",
@@ -483,6 +846,15 @@ public static class JiraXmlAnalysisService
             
         if (!string.IsNullOrEmpty(story.Description))
             prompts.Add("Extract implicit requirements from the description for additional test coverage");
+        
+        stopwatch.Stop();
+        logger?.LogDebug("LLM prompts generation completed {@LLMPromptsResult}", new 
+        { 
+            promptsCount = prompts.Count,
+            prompts = prompts.ToArray(),
+            durationMs = stopwatch.ElapsedMilliseconds,
+            correlationId 
+        });
             
         return prompts.ToArray();
     }
@@ -492,9 +864,13 @@ public static class JiraXmlAnalysisService
     /// </summary>
     /// <param name="issueType">The issue type</param>
     /// <param name="complexityScore">The complexity score</param>
+    /// <param name="logger">Logger for performance tracking</param>
+    /// <param name="correlationId">Correlation ID for tracing</param>
     /// <returns>Testing strategy</returns>
-    private static string DetermineTestingStrategy(string issueType, double complexityScore)
+    private static string DetermineTestingStrategy(string issueType, double complexityScore, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
+        
         var strategy = issueType?.ToLower() switch
         {
             "epic" => "Comprehensive testing with multiple test phases",
@@ -506,6 +882,16 @@ public static class JiraXmlAnalysisService
 
         if (complexityScore >= 7.0)
             strategy += " with emphasis on integration and edge case testing";
+        
+        stopwatch.Stop();
+        logger?.LogDebug("Testing strategy determination completed {@TestingStrategyResult}", new 
+        { 
+            issueType,
+            complexityScore,
+            strategy,
+            durationMs = stopwatch.ElapsedMilliseconds,
+            correlationId 
+        });
             
         return strategy;
     }
@@ -518,23 +904,30 @@ public static class JiraXmlAnalysisService
     /// <param name="uiComponents">UI components analysis</param>
     /// <param name="businessLogic">Business logic analysis</param>
     /// <param name="complexityScore">Complexity score</param>
+    /// <param name="logger">Logger for performance tracking</param>
+    /// <param name="correlationId">Correlation ID for tracing</param>
     /// <returns>Executive summary confidence object</returns>
     private static ExecutiveSummaryConfidence CalculateExecutiveSummaryConfidence(
         JiraStory story, 
         bool xmlWasValid, 
         object uiComponents, 
         object businessLogic, 
-        double complexityScore)
+        double complexityScore,
+        ILogger? logger = null,
+        string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
+        logger?.LogDebug("Starting executive summary confidence calculation {@Context}", new { correlationId, step = "confidence_calculation" });
+        
         // Calculate individual confidence factors with weights
         var breakdown = new ConfidenceBreakdown
         {
-            XmlQuality = CalculateXmlQualityConfidence(xmlWasValid, story),
-            StoryCompleteness = CalculateStoryCompletenessConfidence(story),
-            AnalysisDepth = CalculateAnalysisDepthConfidence(uiComponents, businessLogic),
-            DataQuality = CalculateDataQualityConfidence(story),
-            IntegrationComplexity = CalculateIntegrationComplexityConfidence(story.Description),
-            TestCoverageReadiness = CalculateTestCoverageReadinessConfidence(story, complexityScore)
+            XmlQuality = CalculateXmlQualityConfidence(xmlWasValid, story, logger, correlationId),
+            StoryCompleteness = CalculateStoryCompletenessConfidence(story, logger, correlationId),
+            AnalysisDepth = CalculateAnalysisDepthConfidence(uiComponents, businessLogic, logger, correlationId),
+            DataQuality = CalculateDataQualityConfidence(story, logger, correlationId),
+            IntegrationComplexity = CalculateIntegrationComplexityConfidence(story.Description, logger, correlationId),
+            TestCoverageReadiness = CalculateTestCoverageReadinessConfidence(story, complexityScore, logger, correlationId)
         };
 
         // Weighted calculation based on specified percentages
@@ -550,8 +943,27 @@ public static class JiraXmlAnalysisService
         overallConfidence = Math.Max(0.0, Math.Min(1.0, overallConfidence));
 
         var confidenceLevel = DetermineConfidenceLevel(overallConfidence);
-        var factors = AnalyzeConfidenceFactors(breakdown, story);
+        var factors = AnalyzeConfidenceFactors(breakdown, story, logger, correlationId);
         var recommendedAction = DetermineRecommendedAction(confidenceLevel, factors);
+
+        stopwatch.Stop();
+        logger?.LogInformation("Executive summary confidence calculation completed {@ConfidenceResult}", new 
+        { 
+            overallConfidence = Math.Round(overallConfidence, 3),
+            confidenceLevel,
+            breakdown = new
+            {
+                xmlQuality = Math.Round(breakdown.XmlQuality, 3),
+                storyCompleteness = Math.Round(breakdown.StoryCompleteness, 3),
+                analysisDepth = Math.Round(breakdown.AnalysisDepth, 3),
+                dataQuality = Math.Round(breakdown.DataQuality, 3),
+                integrationComplexity = Math.Round(breakdown.IntegrationComplexity, 3),
+                testCoverageReadiness = Math.Round(breakdown.TestCoverageReadiness, 3)
+            },
+            recommendedAction,
+            durationMs = stopwatch.ElapsedMilliseconds,
+            correlationId 
+        });
 
         return new ExecutiveSummaryConfidence
         {
@@ -566,7 +978,7 @@ public static class JiraXmlAnalysisService
     /// <summary>
     /// Calculates XML quality confidence factor
     /// </summary>
-    private static double CalculateXmlQualityConfidence(bool xmlWasValid, JiraStory story)
+    private static double CalculateXmlQualityConfidence(bool xmlWasValid, JiraStory story, ILogger? logger = null, string correlationId = "")
     {
         double confidence = xmlWasValid ? 0.8 : 0.4; // Base score for XML validity
 
@@ -575,13 +987,25 @@ public static class JiraXmlAnalysisService
         if (!string.IsNullOrEmpty(story.Summary)) confidence += 0.05;
         if (!string.IsNullOrEmpty(story.IssueType)) confidence += 0.05;
 
-        return Math.Min(1.0, confidence);
+        var finalConfidence = Math.Min(1.0, confidence);
+        
+        logger?.LogDebug("XML quality confidence calculated {@QualityConfidenceResult}", new 
+        { 
+            xmlWasValid,
+            hasIssueKey = !string.IsNullOrEmpty(story.IssueKey),
+            hasSummary = !string.IsNullOrEmpty(story.Summary),
+            hasIssueType = !string.IsNullOrEmpty(story.IssueType),
+            confidence = Math.Round(finalConfidence, 3),
+            correlationId 
+        });
+
+        return finalConfidence;
     }
 
     /// <summary>
     /// Calculates story completeness confidence factor
     /// </summary>
-    private static double CalculateStoryCompletenessConfidence(JiraStory story)
+    private static double CalculateStoryCompletenessConfidence(JiraStory story, ILogger? logger = null, string correlationId = "")
     {
         double confidence = 0.0;
 
@@ -591,67 +1015,141 @@ public static class JiraXmlAnalysisService
         if (story.AcceptanceCriteria.Any()) confidence += 0.30;
         if (!string.IsNullOrEmpty(story.Priority)) confidence += 0.10;
 
-        return Math.Min(1.0, confidence);
+        var finalConfidence = Math.Min(1.0, confidence);
+        
+        logger?.LogDebug("Story completeness confidence calculated {@CompletenessConfidenceResult}", new 
+        { 
+            hasSummary = !string.IsNullOrEmpty(story.Summary),
+            hasDescription = !string.IsNullOrEmpty(story.Description),
+            hasAcceptanceCriteria = story.AcceptanceCriteria.Any(),
+            hasPriority = !string.IsNullOrEmpty(story.Priority),
+            acceptanceCriteriaCount = story.AcceptanceCriteria.Count,
+            confidence = Math.Round(finalConfidence, 3),
+            correlationId 
+        });
+
+        return finalConfidence;
     }
 
     /// <summary>
     /// Calculates analysis depth confidence factor
     /// </summary>
-    private static double CalculateAnalysisDepthConfidence(object uiComponents, object businessLogic)
+    private static double CalculateAnalysisDepthConfidence(object uiComponents, object businessLogic, ILogger? logger = null, string correlationId = "")
     {
         double confidence = 0.5; // Base confidence
 
         // UI components analysis depth
         var uiList = uiComponents as IEnumerable<object>;
+        var uiCount = 0;
         if (uiList != null && uiList.Any())
         {
-            confidence += Math.Min(0.3, uiList.Count() * 0.1);
+            uiCount = uiList.Count();
+            confidence += Math.Min(0.3, uiCount * 0.1);
         }
 
         // Business logic analysis depth
         var businessList = businessLogic as IEnumerable<object>;
+        var businessCount = 0;
         if (businessList != null && businessList.Any())
         {
-            confidence += Math.Min(0.2, businessList.Count() * 0.05);
+            businessCount = businessList.Count();
+            confidence += Math.Min(0.2, businessCount * 0.05);
         }
 
-        return Math.Min(1.0, confidence);
+        var finalConfidence = Math.Min(1.0, confidence);
+        
+        logger?.LogDebug("Analysis depth confidence calculated {@AnalysisDepthConfidenceResult}", new 
+        { 
+            uiComponentsCount = uiCount,
+            businessLogicCount = businessCount,
+            confidence = Math.Round(finalConfidence, 3),
+            correlationId 
+        });
+
+        return finalConfidence;
     }
 
     /// <summary>
     /// Calculates data quality confidence factor
     /// </summary>
-    private static double CalculateDataQualityConfidence(JiraStory story)
+    private static double CalculateDataQualityConfidence(JiraStory story, ILogger? logger = null, string correlationId = "")
     {
         double confidence = 0.3; // Base confidence
+        var factors = new Dictionary<string, bool>();
 
         // Story points validity
         if (int.TryParse(story.StoryPoints, out int points) && points > 0)
+        {
             confidence += 0.2;
+            factors["validStoryPoints"] = true;
+        }
+        else
+        {
+            factors["validStoryPoints"] = false;
+        }
 
         // Comments presence and quality
         if (story.Comments.Any())
         {
             confidence += 0.15;
+            factors["hasComments"] = true;
             var recentComments = story.Comments.Where(c => c.Created > DateTime.Now.AddDays(-30)).Count();
-            if (recentComments > 0) confidence += 0.1;
+            if (recentComments > 0)
+            {
+                confidence += 0.1;
+                factors["hasRecentComments"] = true;
+            }
+            else
+            {
+                factors["hasRecentComments"] = false;
+            }
+        }
+        else
+        {
+            factors["hasComments"] = false;
+            factors["hasRecentComments"] = false;
         }
 
         // Custom fields
         if (story.CustomFields.Any())
         {
             confidence += Math.Min(0.25, story.CustomFields.Count * 0.05);
+            factors["hasCustomFields"] = true;
+        }
+        else
+        {
+            factors["hasCustomFields"] = false;
         }
 
-        return Math.Min(1.0, confidence);
+        var finalConfidence = Math.Min(1.0, confidence);
+        
+        logger?.LogDebug("Data quality confidence calculated {@DataQualityConfidenceResult}", new 
+        { 
+            storyPoints = story.StoryPoints,
+            commentsCount = story.Comments.Count,
+            customFieldsCount = story.CustomFields.Count,
+            factors,
+            confidence = Math.Round(finalConfidence, 3),
+            correlationId 
+        });
+
+        return finalConfidence;
     }
 
     /// <summary>
     /// Calculates integration complexity confidence factor
     /// </summary>
-    private static double CalculateIntegrationComplexityConfidence(string description)
+    private static double CalculateIntegrationComplexityConfidence(string description, ILogger? logger = null, string correlationId = "")
     {
-        if (string.IsNullOrEmpty(description)) return 0.5;
+        if (string.IsNullOrEmpty(description))
+        {
+            logger?.LogDebug("Integration complexity confidence defaulted (no description) {@IntegrationConfidenceResult}", new 
+            { 
+                confidence = 0.5,
+                correlationId 
+            });
+            return 0.5;
+        }
 
         double confidence = 0.5; // Base confidence
         var lowerDesc = description.ToLower();
@@ -662,15 +1160,26 @@ public static class JiraXmlAnalysisService
         
         confidence += Math.Min(0.5, foundKeywords * 0.1);
 
-        return Math.Min(1.0, confidence);
+        var finalConfidence = Math.Min(1.0, confidence);
+        
+        logger?.LogDebug("Integration complexity confidence calculated {@IntegrationComplexityConfidenceResult}", new 
+        { 
+            foundKeywords,
+            keywordsFound = integrationKeywords.Where(k => lowerDesc.Contains(k)).ToArray(),
+            confidence = Math.Round(finalConfidence, 3),
+            correlationId 
+        });
+
+        return finalConfidence;
     }
 
     /// <summary>
     /// Calculates test coverage readiness confidence factor
     /// </summary>
-    private static double CalculateTestCoverageReadinessConfidence(JiraStory story, double complexityScore)
+    private static double CalculateTestCoverageReadinessConfidence(JiraStory story, double complexityScore, ILogger? logger = null, string correlationId = "")
     {
         double confidence = 0.4; // Base confidence
+        var factors = new Dictionary<string, object>();
 
         // Acceptance criteria provide good test foundation
         if (story.AcceptanceCriteria.Any())
@@ -678,17 +1187,51 @@ public static class JiraXmlAnalysisService
             confidence += 0.3;
             // More criteria = better test coverage potential
             confidence += Math.Min(0.2, story.AcceptanceCriteria.Count * 0.05);
+            factors["acceptanceCriteriaCount"] = story.AcceptanceCriteria.Count;
+        }
+        else
+        {
+            factors["acceptanceCriteriaCount"] = 0;
         }
 
         // Complexity score influences test readiness
-        if (complexityScore <= 3.0) confidence += 0.1; // Simple stories easier to test
-        else if (complexityScore >= 7.0) confidence += 0.05; // Complex stories need more planning
+        if (complexityScore <= 3.0)
+        {
+            confidence += 0.1; // Simple stories easier to test
+            factors["complexityImpact"] = "simple_bonus";
+        }
+        else if (complexityScore >= 7.0)
+        {
+            confidence += 0.05; // Complex stories need more planning
+            factors["complexityImpact"] = "complex_bonus";
+        }
+        else
+        {
+            factors["complexityImpact"] = "neutral";
+        }
 
         // Description quality affects test case generation
         if (!string.IsNullOrEmpty(story.Description) && story.Description.Length > 100)
+        {
             confidence += 0.1;
+            factors["hasDetailedDescription"] = true;
+        }
+        else
+        {
+            factors["hasDetailedDescription"] = false;
+        }
 
-        return Math.Min(1.0, confidence);
+        var finalConfidence = Math.Min(1.0, confidence);
+        
+        logger?.LogDebug("Test coverage readiness confidence calculated {@TestCoverageConfidenceResult}", new 
+        { 
+            complexityScore,
+            factors,
+            confidence = Math.Round(finalConfidence, 3),
+            correlationId 
+        });
+
+        return finalConfidence;
     }
 
     /// <summary>
@@ -709,8 +1252,9 @@ public static class JiraXmlAnalysisService
     /// <summary>
     /// Analyzes confidence factors to identify strengths and weaknesses
     /// </summary>
-    private static ConfidenceFactors AnalyzeConfidenceFactors(ConfidenceBreakdown breakdown, JiraStory story)
+    private static ConfidenceFactors AnalyzeConfidenceFactors(ConfidenceBreakdown breakdown, JiraStory story, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
         var strengths = new List<string>();
         var weaknesses = new List<string>();
         var improvementAreas = new List<string>();
@@ -734,6 +1278,16 @@ public static class JiraXmlAnalysisService
         // Ensure we have at least one item in each category
         if (!strengths.Any()) strengths.Add("Basic story structure present");
         if (!weaknesses.Any() && !improvementAreas.Any()) improvementAreas.Add("Minor refinements possible");
+
+        stopwatch.Stop();
+        logger?.LogDebug("Confidence factors analysis completed {@FactorsAnalysisResult}", new 
+        { 
+            strengthsCount = strengths.Count,
+            weaknessesCount = weaknesses.Count,
+            improvementAreasCount = improvementAreas.Count,
+            durationMs = stopwatch.ElapsedMilliseconds,
+            correlationId 
+        });
 
         return new ConfidenceFactors
         {
@@ -764,43 +1318,116 @@ public static class JiraXmlAnalysisService
     /// </summary>
     /// <param name="story">The Jira story data</param>
     /// <param name="xmlWasValid">Whether the XML was valid</param>
+    /// <param name="logger">Logger for performance tracking</param>
+    /// <param name="correlationId">Correlation ID for tracing</param>
     /// <returns>Analysis confidence score</returns>
-    private static double CalculateAnalysisConfidence(JiraStory story, bool xmlWasValid)
+    private static double CalculateAnalysisConfidence(JiraStory story, bool xmlWasValid, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
         double confidence = 0.5; // Base confidence
+        var factors = new Dictionary<string, bool>();
         
         // XML quality
-        confidence += xmlWasValid ? 0.2 : 0.1;
+        if (xmlWasValid)
+        {
+            confidence += 0.2;
+            factors["xmlValid"] = true;
+        }
+        else
+        {
+            confidence += 0.1;
+            factors["xmlValid"] = false;
+        }
         
         // Story completeness
         if (!string.IsNullOrEmpty(story.Summary))
+        {
             confidence += 0.1;
+            factors["hasSummary"] = true;
+        }
+        else
+        {
+            factors["hasSummary"] = false;
+        }
             
         if (!string.IsNullOrEmpty(story.Description))
+        {
             confidence += 0.1;
+            factors["hasDescription"] = true;
+        }
+        else
+        {
+            factors["hasDescription"] = false;
+        }
             
         if (story.AcceptanceCriteria.Any())
+        {
             confidence += 0.1;
+            factors["hasAcceptanceCriteria"] = true;
+        }
+        else
+        {
+            factors["hasAcceptanceCriteria"] = false;
+        }
+        
+        var finalConfidence = Math.Round(confidence, 2);
+        stopwatch.Stop();
+        
+        logger?.LogDebug("Analysis confidence calculation completed {@AnalysisConfidenceResult}", new 
+        { 
+            confidence = finalConfidence,
+            factors,
+            durationMs = stopwatch.ElapsedMilliseconds,
+            correlationId 
+        });
             
-        return Math.Round(confidence, 2);
+        return finalConfidence;
     }
 
     /// <summary>
     /// Analyzes comments for additional context and insights
     /// </summary>
     /// <param name="comments">List of Jira comments</param>
+    /// <param name="logger">Logger for performance tracking</param>
+    /// <param name="correlationId">Correlation ID for tracing</param>
     /// <returns>Comment analysis object</returns>
-    private static object AnalyzeComments(List<JiraComment> comments)
+    private static object AnalyzeComments(List<JiraComment> comments, ILogger? logger = null, string correlationId = "")
     {
-        if (!comments.Any()) return new { hasComments = false, summary = "No comments found" };
+        var stopwatch = Stopwatch.StartNew();
+        
+        if (!comments.Any())
+        {
+            logger?.LogDebug("No comments found for analysis {@CommentsAnalysisResult}", new 
+            { 
+                hasComments = false,
+                durationMs = stopwatch.ElapsedMilliseconds,
+                correlationId 
+            });
+            
+            return new { hasComments = false, summary = "No comments found" };
+        }
         
         var recentComments = comments.Where(c => c.Created > DateTime.Now.AddDays(-30)).ToList();
         var uniqueAuthors = comments.Select(c => c.Author).Distinct().ToList();
         
         // Extract key insights from comments
-        var keyInsights = ExtractCommentInsights(comments);
-        var stakeholderConcerns = ExtractStakeholderConcerns(comments);
-        var clarifications = ExtractClarifications(comments);
+        var keyInsights = ExtractCommentInsights(comments, logger, correlationId);
+        var stakeholderConcerns = ExtractStakeholderConcerns(comments, logger, correlationId);
+        var clarifications = ExtractClarifications(comments, logger, correlationId);
+        
+        stopwatch.Stop();
+        logger?.LogDebug("Comments analysis completed {@CommentsAnalysisResult}", new 
+        { 
+            hasComments = true,
+            totalComments = comments.Count,
+            recentComments = recentComments.Count,
+            uniqueAuthors = uniqueAuthors.Count,
+            keyInsightsCount = keyInsights.Length,
+            stakeholderConcernsCount = stakeholderConcerns.Length,
+            clarificationsCount = clarifications.Length,
+            durationMs = stopwatch.ElapsedMilliseconds,
+            correlationId 
+        });
         
         return new
         {
@@ -829,9 +1456,12 @@ public static class JiraXmlAnalysisService
     /// Extracts key insights from comment text
     /// </summary>
     /// <param name="comments">List of comments to analyze</param>
+    /// <param name="logger">Logger for performance tracking</param>
+    /// <param name="correlationId">Correlation ID for tracing</param>
     /// <returns>Array of key insights</returns>
-    private static string[] ExtractCommentInsights(List<JiraComment> comments)
+    private static string[] ExtractCommentInsights(List<JiraComment> comments, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
         var insights = new List<string>();
         var allText = string.Join(" ", comments.Select(c => c.CleanContent.ToLower()));
         
@@ -854,6 +1484,15 @@ public static class JiraXmlAnalysisService
         if (allText.Contains("test") || allText.Contains("qa") || allText.Contains("verify"))
             insights.Add("Testing considerations mentioned");
         
+        stopwatch.Stop();
+        logger?.LogDebug("Comment insights extraction completed {@InsightsResult}", new 
+        { 
+            insightsCount = insights.Count,
+            insights = insights.ToArray(),
+            durationMs = stopwatch.ElapsedMilliseconds,
+            correlationId 
+        });
+        
         return insights.ToArray();
     }
 
@@ -861,9 +1500,12 @@ public static class JiraXmlAnalysisService
     /// Extracts stakeholder concerns from comments
     /// </summary>
     /// <param name="comments">List of comments to analyze</param>
+    /// <param name="logger">Logger for performance tracking</param>
+    /// <param name="correlationId">Correlation ID for tracing</param>
     /// <returns>Array of stakeholder concerns</returns>
-    private static string[] ExtractStakeholderConcerns(List<JiraComment> comments)
+    private static string[] ExtractStakeholderConcerns(List<JiraComment> comments, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
         var concerns = new List<string>();
         
         foreach (var comment in comments)
@@ -877,6 +1519,14 @@ public static class JiraXmlAnalysisService
                 concerns.Add($"{comment.Author}: {comment.CleanContent.Substring(0, Math.Min(100, comment.CleanContent.Length))}...");
         }
         
+        stopwatch.Stop();
+        logger?.LogDebug("Stakeholder concerns extraction completed {@ConcernsResult}", new 
+        { 
+            concernsCount = concerns.Count,
+            durationMs = stopwatch.ElapsedMilliseconds,
+            correlationId 
+        });
+        
         return concerns.Take(5).ToArray();
     }
 
@@ -884,9 +1534,12 @@ public static class JiraXmlAnalysisService
     /// Extracts clarifications and decisions from comments
     /// </summary>
     /// <param name="comments">List of comments to analyze</param>
+    /// <param name="logger">Logger for performance tracking</param>
+    /// <param name="correlationId">Correlation ID for tracing</param>
     /// <returns>Array of clarifications</returns>
-    private static string[] ExtractClarifications(List<JiraComment> comments)
+    private static string[] ExtractClarifications(List<JiraComment> comments, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
         var clarifications = new List<string>();
         
         foreach (var comment in comments)
@@ -899,6 +1552,14 @@ public static class JiraXmlAnalysisService
             if (content.Contains("let's") || content.Contains("we should") || content.Contains("decided"))
                 clarifications.Add($"{comment.Author}: {comment.CleanContent.Substring(0, Math.Min(100, comment.CleanContent.Length))}...");
         }
+        
+        stopwatch.Stop();
+        logger?.LogDebug("Clarifications extraction completed {@ClarificationsResult}", new 
+        { 
+            clarificationsCount = clarifications.Count,
+            durationMs = stopwatch.ElapsedMilliseconds,
+            correlationId 
+        });
         
         return clarifications.Take(5).ToArray();
     }
