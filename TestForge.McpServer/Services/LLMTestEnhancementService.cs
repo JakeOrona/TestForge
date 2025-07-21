@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using TestForge.McpServer.Models;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace TestForge.McpServer.Services;
 
@@ -42,6 +43,7 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
     private readonly ILogger<LLMTestEnhancementService> _logger;
     private readonly IUiComponentAnalysisService _uiAnalysisService;
     private readonly IBusinessLogicAnalysisService _businessLogicService;
+    private static ILogger? _staticLogger;
 
     // Semantic trigger rules for test category inference
     private readonly Dictionary<string[], TestCategory[]> _semanticTriggers = new()
@@ -67,6 +69,23 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
     }
 
     /// <summary>
+    /// Initializes the static logger for comprehensive test enhancement monitoring
+    /// </summary>
+    public static void Initialize(ILogger? logger = null)
+    {
+        _staticLogger = logger;
+        _staticLogger?.LogInformation("LLMTestEnhancementService initialized {@ServiceCapabilities}", new {
+            semanticAnalysis = true,
+            multiCategoryGeneration = true,
+            testMatrixGeneration = true,
+            enhancementCategories = new[] { "Security", "Performance", "Accessibility", "Integration", "UX", "DataValidation", "ErrorHandling", "Boundary", "StateManagement", "Negative" },
+            parallelProcessing = true,
+            qualityAssessment = true,
+            coverageOptimization = true
+        });
+    }
+
+    /// <summary>
     /// Enhances initial test cases with comprehensive coverage across all testing categories
     /// </summary>
     public async Task<EnhancedTestSuite> EnhanceTestCases(
@@ -74,6 +93,35 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
         List<TestCase> initialTests, 
         TestEnhancementConfig config)
     {
+        var correlationId = Guid.NewGuid().ToString("N")[..8];
+        var stopwatch = Stopwatch.StartNew();
+        var operationLogger = _staticLogger ?? _logger;
+
+        operationLogger?.LogInformation("Test enhancement initiated {@Metrics}", new {
+            correlationId,
+            method = "EnhanceTestCases",
+            ticketId = parsedXml.TicketId,
+            initialTestCount = initialTests.Count,
+            configurationAnalysis = new {
+                includeNegativeTests = config.IncludeNegativeTests,
+                includeSecurityTests = config.IncludeSecurityTests,
+                includeAccessibilityTests = config.IncludeAccessibilityTests,
+                includePerformanceTests = config.IncludePerformanceTests,
+                includeBoundaryTests = config.IncludeBoundaryTests,
+                includeErrorHandlingTests = config.IncludeErrorHandlingTests,
+                includeIntegrationTests = config.IncludeIntegrationTests,
+                includeUserExperienceTests = config.IncludeUserExperienceTests,
+                includeDataValidationTests = config.IncludeDataValidationTests,
+                includeStateManagementTests = config.IncludeStateManagementTests
+            },
+            inputAnalysis = new {
+                uiComponentCount = parsedXml.UIComponents?.Count ?? 0,
+                businessLogicCount = parsedXml.BusinessLogic?.Count ?? 0,
+                descriptionLength = parsedXml.Description?.Length ?? 0,
+                technicalComplexity = CalculateComplexityScore(parsedXml)
+            }
+        });
+
         _logger.LogInformation("Starting comprehensive test case enhancement for {TicketId}", parsedXml.TicketId);
 
         var enhancedSuite = new EnhancedTestSuite
@@ -87,45 +135,107 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
         {
             // Generate all test categories in parallel for maximum coverage
             var enhancementTasks = new List<Task<List<TestCase>>>();
+            var taskStopwatch = Stopwatch.StartNew();
             
             if (config.IncludeNegativeTests)
-                enhancementTasks.Add(Task.Run(() => GenerateNegativeTestScenarios(parsedXml)));
+                enhancementTasks.Add(Task.Run(() => GenerateNegativeTestScenarios(parsedXml, operationLogger, correlationId)));
             
             if (config.IncludeSecurityTests)
-                enhancementTasks.Add(Task.Run(() => GenerateSecurityTestScenarios(parsedXml)));
+                enhancementTasks.Add(Task.Run(() => GenerateSecurityTestScenarios(parsedXml, operationLogger, correlationId)));
             
             if (config.IncludeAccessibilityTests)
-                enhancementTasks.Add(Task.Run(() => GenerateAccessibilityTestScenarios(parsedXml)));
+                enhancementTasks.Add(Task.Run(() => GenerateAccessibilityTestScenarios(parsedXml, operationLogger, correlationId)));
             
             if (config.IncludePerformanceTests)
-                enhancementTasks.Add(Task.Run(() => GeneratePerformanceTestScenarios(parsedXml)));
+                enhancementTasks.Add(Task.Run(() => GeneratePerformanceTestScenarios(parsedXml, operationLogger, correlationId)));
             
             if (config.IncludeBoundaryTests)
-                enhancementTasks.Add(Task.Run(() => GenerateBoundaryTestScenarios(parsedXml)));
+                enhancementTasks.Add(Task.Run(() => GenerateBoundaryTestScenarios(parsedXml, operationLogger, correlationId)));
             
             if (config.IncludeErrorHandlingTests)
-                enhancementTasks.Add(Task.Run(() => GenerateErrorHandlingTestScenarios(parsedXml)));
+                enhancementTasks.Add(Task.Run(() => GenerateErrorHandlingTestScenarios(parsedXml, operationLogger, correlationId)));
             
             if (config.IncludeIntegrationTests)
-                enhancementTasks.Add(Task.Run(() => GenerateIntegrationTestScenarios(parsedXml)));
+                enhancementTasks.Add(Task.Run(() => GenerateIntegrationTestScenarios(parsedXml, operationLogger, correlationId)));
             
             if (config.IncludeUserExperienceTests)
-                enhancementTasks.Add(Task.Run(() => GenerateUserExperienceTestScenarios(parsedXml)));
+                enhancementTasks.Add(Task.Run(() => GenerateUserExperienceTestScenarios(parsedXml, operationLogger, correlationId)));
             
             if (config.IncludeDataValidationTests)
-                enhancementTasks.Add(Task.Run(() => GenerateDataValidationTestScenarios(parsedXml)));
+                enhancementTasks.Add(Task.Run(() => GenerateDataValidationTestScenarios(parsedXml, operationLogger, correlationId)));
             
             if (config.IncludeStateManagementTests)
-                enhancementTasks.Add(Task.Run(() => GenerateStateManagementTestScenarios(parsedXml)));
+                enhancementTasks.Add(Task.Run(() => GenerateStateManagementTestScenarios(parsedXml, operationLogger, correlationId)));
+
+            operationLogger?.LogInformation("Parallel test generation tasks initiated {@Metrics}", new {
+                correlationId,
+                taskCount = enhancementTasks.Count,
+                parallelProcessingEnabled = true,
+                taskInitiationTimeMs = taskStopwatch.TotalMilliseconds
+            });
 
             var enhancementResults = await Task.WhenAll(enhancementTasks);
+            taskStopwatch.Stop();
+
+            operationLogger?.LogInformation("Parallel test generation completed {@Metrics}", new {
+                correlationId,
+                parallelExecutionTimeMs = taskStopwatch.TotalMilliseconds,
+                taskResults = enhancementResults.Select((result, index) => new {
+                    taskIndex = index,
+                    generatedTestCount = result.Count,
+                    success = result != null
+                }).ToArray(),
+                totalGeneratedTests = enhancementResults.Sum(r => r?.Count ?? 0)
+            });
+
             enhancedSuite.EnhancedTests = enhancementResults.SelectMany(tests => tests).ToList();
 
             // Remove duplicates and ensure uniqueness
-            enhancedSuite.EnhancedTests = RemoveDuplicateTestCases(enhancedSuite.EnhancedTests);
+            var duplicateStopwatch = Stopwatch.StartNew();
+            var originalCount = enhancedSuite.EnhancedTests.Count;
+            enhancedSuite.EnhancedTests = RemoveDuplicateTestCases(enhancedSuite.EnhancedTests, operationLogger, correlationId);
+            duplicateStopwatch.Stop();
+
+            operationLogger?.LogInformation("Duplicate removal completed {@Metrics}", new {
+                correlationId,
+                originalTestCount = originalCount,
+                uniqueTestCount = enhancedSuite.EnhancedTests.Count,
+                duplicatesRemoved = originalCount - enhancedSuite.EnhancedTests.Count,
+                duplicateRemovalTimeMs = duplicateStopwatch.TotalMilliseconds,
+                duplicateRemovalEfficiency = originalCount > 0 ? Math.Round((double)(originalCount - enhancedSuite.EnhancedTests.Count) / originalCount * 100, 2) : 0
+            });
             
             // Validate and categorize all tests
-            ValidateTestCaseCoverage(enhancedSuite, parsedXml);
+            ValidateTestCaseCoverage(enhancedSuite, parsedXml, operationLogger, correlationId);
+
+            var enhancementQuality = CalculateEnhancementQuality(enhancedSuite, initialTests);
+            stopwatch.Stop();
+
+            operationLogger?.LogInformation("Test enhancement completed {@Metrics}", new {
+                correlationId,
+                method = "EnhanceTestCases",
+                processingTimeMs = stopwatch.TotalMilliseconds,
+                originalTestCount = initialTests.Count,
+                enhancedTestCount = enhancedSuite.EnhancedTests.Count,
+                totalTestCount = enhancedSuite.TotalTestCount,
+                totalCoverage = enhancedSuite.CoverageSummary.CoveragePercentage,
+                categoryDistribution = new {
+                    security = enhancedSuite.CoverageSummary.SecurityTestCount,
+                    performance = enhancedSuite.CoverageSummary.PerformanceTestCount,
+                    accessibility = enhancedSuite.CoverageSummary.AccessibilityTestCount,
+                    boundary = enhancedSuite.CoverageSummary.BoundaryTestCount,
+                    errorHandling = enhancedSuite.CoverageSummary.ErrorHandlingTestCount,
+                    integration = enhancedSuite.CoverageSummary.IntegrationTestCount,
+                    userExperience = enhancedSuite.CoverageSummary.UserExperienceTestCount,
+                    dataValidation = enhancedSuite.CoverageSummary.DataValidationTestCount,
+                    stateManagement = enhancedSuite.CoverageSummary.StateManagementTestCount,
+                    negative = enhancedSuite.CoverageSummary.NegativeTestCount,
+                    positive = enhancedSuite.CoverageSummary.PositiveTestCount
+                },
+                enhancementQuality,
+                processingEfficiency = stopwatch.TotalMilliseconds < 10000 ? "optimal" : stopwatch.TotalMilliseconds < 30000 ? "good" : "slow",
+                success = true
+            });
 
             _logger.LogInformation("Generated {TotalTests} comprehensive test cases ({OriginalCount} original + {EnhancedCount} enhanced)",
                 enhancedSuite.TotalTestCount, initialTests.Count, enhancedSuite.EnhancedTests.Count);
@@ -134,6 +244,18 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
         }
         catch (Exception ex)
         {
+            stopwatch.Stop();
+            operationLogger?.LogError(ex, "Test enhancement failed {@ErrorContext}", new {
+                correlationId,
+                method = "EnhanceTestCases",
+                ticketId = parsedXml.TicketId,
+                processingTimeMs = stopwatch.TotalMilliseconds,
+                error = ex.Message,
+                originalTestCount = initialTests.Count,
+                enhancementPhase = "parallel_generation",
+                recommendation = "Review configuration and input data quality"
+            });
+
             _logger.LogError(ex, "Error during test case enhancement for {TicketId}", parsedXml.TicketId);
             throw;
         }
@@ -144,218 +266,506 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
     /// </summary>
     public async Task<TestMatrix> GenerateTestMatrix(ParsedJiraData data)
     {
+        var correlationId = Guid.NewGuid().ToString("N")[..8];
+        var stopwatch = Stopwatch.StartNew();
+        var operationLogger = _staticLogger ?? _logger;
+
+        operationLogger?.LogInformation("Test matrix generation initiated {@Metrics}", new {
+            correlationId,
+            method = "GenerateTestMatrix",
+            ticketId = data.TicketId,
+            inputAnalysis = new {
+                uiComponentCount = data.UIComponents?.Count ?? 0,
+                businessLogicCount = data.BusinessLogic?.Count ?? 0,
+                descriptionComplexity = data.Description?.Length ?? 0
+            }
+        });
+
         _logger.LogInformation("Generating comprehensive test matrix for {TicketId}", data.TicketId);
 
         var matrix = new TestMatrix();
         
-        // Define comprehensive test categories
-        matrix.Categories = new List<TestCategoryDetails>
+        try 
         {
-            new() { Name = "Functional", Description = "Core functionality testing", TestTypes = new() { "Positive", "Negative", "Boundary" }, PotentialTestCount = 5 },
-            new() { Name = "Security", Description = "Security and vulnerability testing", TestTypes = new() { "Authentication", "Authorization", "Input Validation", "XSS", "SQL Injection" }, PotentialTestCount = 8 },
-            new() { Name = "Performance", Description = "Load and performance testing", TestTypes = new() { "Load", "Stress", "Volume", "Response Time" }, PotentialTestCount = 4 },
-            new() { Name = "Accessibility", Description = "WCAG compliance testing", TestTypes = new() { "Screen Reader", "Keyboard Navigation", "Color Contrast", "ARIA" }, PotentialTestCount = 6 },
-            new() { Name = "UI/UX", Description = "User interface and experience testing", TestTypes = new() { "Responsiveness", "Cross-browser", "Mobile", "Usability" }, PotentialTestCount = 7 },
-            new() { Name = "Integration", Description = "System integration testing", TestTypes = new() { "API", "Database", "Third-party", "Workflow" }, PotentialTestCount = 5 },
-            new() { Name = "Data Validation", Description = "Data integrity and validation testing", TestTypes = new() { "Format", "Range", "Type", "Required Fields" }, PotentialTestCount = 6 },
-            new() { Name = "Error Handling", Description = "Error scenarios and recovery testing", TestTypes = new() { "Network Failure", "Timeout", "Invalid Input", "System Error" }, PotentialTestCount = 4 },
-            new() { Name = "State Management", Description = "Application state and session testing", TestTypes = new() { "Session", "Cache", "Persistence", "Synchronization" }, PotentialTestCount = 4 },
-            new() { Name = "Boundary Testing", Description = "Edge cases and limits testing", TestTypes = new() { "Min/Max Values", "Empty Data", "Special Characters", "Unicode" }, PotentialTestCount = 5 }
-        };
+            // Define comprehensive test categories
+            var categoryStopwatch = Stopwatch.StartNew();
+            matrix.Categories = new List<TestCategoryDetails>
+            {
+                new() { Name = "Functional", Description = "Core functionality testing", TestTypes = new() { "Positive", "Negative", "Boundary" }, PotentialTestCount = 5 },
+                new() { Name = "Security", Description = "Security and vulnerability testing", TestTypes = new() { "Authentication", "Authorization", "Input Validation", "XSS", "SQL Injection" }, PotentialTestCount = 8 },
+                new() { Name = "Performance", Description = "Load and performance testing", TestTypes = new() { "Load", "Stress", "Volume", "Response Time" }, PotentialTestCount = 4 },
+                new() { Name = "Accessibility", Description = "WCAG compliance testing", TestTypes = new() { "Screen Reader", "Keyboard Navigation", "Color Contrast", "ARIA" }, PotentialTestCount = 6 },
+                new() { Name = "UI/UX", Description = "User interface and experience testing", TestTypes = new() { "Responsiveness", "Cross-browser", "Mobile", "Usability" }, PotentialTestCount = 7 },
+                new() { Name = "Integration", Description = "System integration testing", TestTypes = new() { "API", "Database", "Third-party", "Workflow" }, PotentialTestCount = 5 },
+                new() { Name = "Data Validation", Description = "Data integrity and validation testing", TestTypes = new() { "Format", "Range", "Type", "Required Fields" }, PotentialTestCount = 6 },
+                new() { Name = "Error Handling", Description = "Error scenarios and recovery testing", TestTypes = new() { "Network Failure", "Timeout", "Invalid Input", "System Error" }, PotentialTestCount = 4 },
+                new() { Name = "State Management", Description = "Application state and session testing", TestTypes = new() { "Session", "Cache", "Persistence", "Synchronization" }, PotentialTestCount = 4 },
+                new() { Name = "Boundary Testing", Description = "Edge cases and limits testing", TestTypes = new() { "Min/Max Values", "Empty Data", "Special Characters", "Unicode" }, PotentialTestCount = 5 }
+            };
+            categoryStopwatch.Stop();
 
-        // Generate potential test scenarios based on ticket data
-        matrix.Scenarios = GeneratePotentialScenarios(data);
+            operationLogger?.LogInformation("Test categories setup completed {@Metrics}", new {
+                correlationId,
+                categoryCount = matrix.Categories.Count,
+                totalPotentialTests = matrix.Categories.Sum(c => c.PotentialTestCount),
+                categorySetupTimeMs = categoryStopwatch.TotalMilliseconds,
+                categoryBreakdown = matrix.Categories.Select(c => new {
+                    name = c.Name,
+                    testTypeCount = c.TestTypes.Count,
+                    potentialTests = c.PotentialTestCount
+                }).ToArray()
+            });
+
+            // Generate potential test scenarios based on ticket data
+            var scenarioStopwatch = Stopwatch.StartNew();
+            matrix.Scenarios = GeneratePotentialScenarios(data, operationLogger, correlationId);
+            scenarioStopwatch.Stop();
+
+            operationLogger?.LogInformation("Test scenarios generated {@Metrics}", new {
+                correlationId,
+                scenarioCount = matrix.Scenarios.Count,
+                scenarioGenerationTimeMs = scenarioStopwatch.TotalMilliseconds,
+                scenarioBreakdown = matrix.Scenarios.GroupBy(s => s.Category)
+                    .Select(g => new { category = g.Key, count = g.Count() })
+                    .ToArray()
+            });
         
-        // Create coverage matrix
-        matrix.CoverageMatrix = await GenerateCoverageMatrix(data);
+            // Create coverage matrix
+            var coverageStopwatch = Stopwatch.StartNew();
+            matrix.CoverageMatrix = await GenerateCoverageMatrix(data, operationLogger, correlationId);
+            coverageStopwatch.Stop();
 
-        return matrix;
+            stopwatch.Stop();
+
+            operationLogger?.LogInformation("Test matrix generation completed {@Metrics}", new {
+                correlationId,
+                method = "GenerateTestMatrix",
+                processingTimeMs = stopwatch.TotalMilliseconds,
+                matrixAnalysis = new {
+                    totalCategories = matrix.Categories.Count,
+                    totalScenarios = matrix.Scenarios.Count,
+                    featureMappingCount = matrix.CoverageMatrix.FeatureTestMapping.Count,
+                    userRoleMappingCount = matrix.CoverageMatrix.UserRoleTestMapping.Count,
+                    componentMappingCount = matrix.CoverageMatrix.ComponentTestMapping.Count
+                },
+                coverageMatrixGenerationTimeMs = coverageStopwatch.TotalMilliseconds,
+                matrixQuality = "comprehensive",
+                success = true
+            });
+
+            return matrix;
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            operationLogger?.LogError(ex, "Test matrix generation failed {@ErrorContext}", new {
+                correlationId,
+                method = "GenerateTestMatrix",
+                ticketId = data.TicketId,
+                processingTimeMs = stopwatch.TotalMilliseconds,
+                error = ex.Message,
+                matrixGenerationPhase = "category_or_scenario_generation",
+                recommendation = "Review input data structure and matrix generation logic"
+            });
+            throw;
+        }
     }
 
     /// <summary>
     /// Generates negative test scenarios for comprehensive coverage
     /// </summary>
-    public List<TestCase> GenerateNegativeTestScenarios(ParsedJiraData data)
+    public List<TestCase> GenerateNegativeTestScenarios(ParsedJiraData data, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
+        var operationLogger = logger ?? _staticLogger ?? _logger;
+
+        operationLogger?.LogInformation("Negative test generation initiated {@Metrics}", new {
+            correlationId,
+            method = "GenerateNegativeTestScenarios",
+            inputAnalysis = new {
+                uiComponentCount = data.UIComponents?.Count ?? 0,
+                businessLogicCount = data.BusinessLogic?.Count ?? 0,
+                expectedNegativeScenarios = (data.UIComponents?.Count ?? 0) * 2 + (data.BusinessLogic?.Count ?? 0) + 3
+            }
+        });
+
         var negativeTests = new List<TestCase>();
         var testId = 1;
 
-        // Generate negative tests for each UI component
-        foreach (var component in data.UIComponents)
+        try
         {
-            switch (component.Type.ToLower())
+            // Generate negative tests for each UI component
+            var componentStopwatch = Stopwatch.StartNew();
+            foreach (var component in data.UIComponents)
             {
-                case "form":
-                case "input":
-                    negativeTests.AddRange(GenerateInputNegativeTests(component, data, ref testId));
-                    break;
-                case "button":
-                    negativeTests.AddRange(GenerateButtonNegativeTests(component, data, ref testId));
-                    break;
-                case "dropdown":
-                case "select":
-                    negativeTests.AddRange(GenerateDropdownNegativeTests(component, data, ref testId));
-                    break;
-                case "modal":
-                case "dialog":
-                    negativeTests.AddRange(GenerateModalNegativeTests(component, data, ref testId));
-                    break;
+                switch (component.Type.ToLower())
+                {
+                    case "form":
+                    case "input":
+                        negativeTests.AddRange(GenerateInputNegativeTests(component, data, ref testId, operationLogger, correlationId));
+                        break;
+                    case "button":
+                        negativeTests.AddRange(GenerateButtonNegativeTests(component, data, ref testId, operationLogger, correlationId));
+                        break;
+                    case "dropdown":
+                    case "select":
+                        negativeTests.AddRange(GenerateDropdownNegativeTests(component, data, ref testId, operationLogger, correlationId));
+                        break;
+                    case "modal":
+                    case "dialog":
+                        negativeTests.AddRange(GenerateModalNegativeTests(component, data, ref testId, operationLogger, correlationId));
+                        break;
+                }
             }
-        }
+            componentStopwatch.Stop();
 
-        // Generate negative tests for business logic
-        foreach (var logic in data.BusinessLogic)
+            operationLogger?.LogInformation("UI component negative tests generated {@Metrics}", new {
+                correlationId,
+                componentTestCount = negativeTests.Count,
+                componentProcessingTimeMs = componentStopwatch.TotalMilliseconds,
+                componentBreakdown = data.UIComponents.GroupBy(c => c.Type.ToLower())
+                    .Select(g => new { type = g.Key, count = g.Count() })
+                    .ToArray()
+            });
+
+            // Generate negative tests for business logic
+            var businessLogicStopwatch = Stopwatch.StartNew();
+            var businessLogicStartCount = negativeTests.Count;
+            foreach (var logic in data.BusinessLogic)
+            {
+                negativeTests.AddRange(GenerateBusinessLogicNegativeTests(logic, data, ref testId, operationLogger, correlationId));
+            }
+            businessLogicStopwatch.Stop();
+
+            operationLogger?.LogInformation("Business logic negative tests generated {@Metrics}", new {
+                correlationId,
+                businessLogicTestCount = negativeTests.Count - businessLogicStartCount,
+                businessLogicProcessingTimeMs = businessLogicStopwatch.TotalMilliseconds,
+                businessLogicRuleCount = data.BusinessLogic?.Count ?? 0
+            });
+
+            // Generate general negative scenarios
+            var generalStopwatch = Stopwatch.StartNew();
+            var generalStartCount = negativeTests.Count;
+            negativeTests.AddRange(GenerateGeneralNegativeTests(data, ref testId, operationLogger, correlationId));
+            generalStopwatch.Stop();
+
+            stopwatch.Stop();
+
+            var testQuality = CalculateTestGenerationQuality(negativeTests);
+
+            operationLogger?.LogInformation("Negative test generation completed {@Metrics}", new {
+                correlationId,
+                method = "GenerateNegativeTestScenarios",
+                processingTimeMs = stopwatch.TotalMilliseconds,
+                totalNegativeTests = negativeTests.Count,
+                testBreakdown = new {
+                    uiComponentTests = negativeTests.Count - (negativeTests.Count - businessLogicStartCount) - (negativeTests.Count - generalStartCount),
+                    businessLogicTests = negativeTests.Count - businessLogicStartCount - (negativeTests.Count - generalStartCount),
+                    generalTests = negativeTests.Count - generalStartCount
+                },
+                averageConfidence = negativeTests.Count > 0 ? Math.Round(negativeTests.Average(t => t.Confidence), 2) : 0,
+                testQuality,
+                generationEfficiency = stopwatch.TotalMilliseconds / Math.Max(negativeTests.Count, 1),
+                success = true
+            });
+
+            return negativeTests;
+        }
+        catch (Exception ex)
         {
-            negativeTests.AddRange(GenerateBusinessLogicNegativeTests(logic, data, ref testId));
+            stopwatch.Stop();
+            operationLogger?.LogError(ex, "Negative test generation failed {@ErrorContext}", new {
+                correlationId,
+                method = "GenerateNegativeTestScenarios",
+                processingTimeMs = stopwatch.TotalMilliseconds,
+                error = ex.Message,
+                partialTestCount = negativeTests.Count,
+                generationPhase = "ui_component_or_business_logic",
+                recommendation = "Review component types and business logic structure"
+            });
+            throw;
         }
-
-        // Generate general negative scenarios
-        negativeTests.AddRange(GenerateGeneralNegativeTests(data, ref testId));
-
-        return negativeTests;
     }
 
     /// <summary>
     /// Generates security test scenarios including OWASP Top 10
     /// </summary>
-    public List<TestCase> GenerateSecurityTestScenarios(ParsedJiraData data)
+    public List<TestCase> GenerateSecurityTestScenarios(ParsedJiraData data, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
+        var operationLogger = logger ?? _staticLogger ?? _logger;
+
+        operationLogger?.LogInformation("Security test generation initiated {@Metrics}", new {
+            correlationId,
+            method = "GenerateSecurityTestScenarios",
+            securityAssessment = new {
+                hasAuthenticationContext = data.Description.Contains("login", StringComparison.OrdinalIgnoreCase) || data.Description.Contains("auth", StringComparison.OrdinalIgnoreCase),
+                hasInputFields = data.UIComponents.Any(c => c.Type.ToLower() == "input" || c.Type.ToLower() == "form"),
+                riskLevel = CalculateSecurityRiskLevel(data),
+                expectedSecurityTests = 2 + (data.Description.Contains("auth", StringComparison.OrdinalIgnoreCase) ? 2 : 0) + 2
+            }
+        });
+
         var securityTests = new List<TestCase>();
         var testId = 1;
 
-        // Input validation security tests
-        securityTests.Add(new TestCase
+        try
         {
-            Id = $"SEC_{testId++:D3}",
-            Title = "SQL Injection Prevention Test",
-            Description = "Verify system prevents SQL injection attacks through input validation",
-            Priority = "High",
-            Category = TestCategoryType.Security,
-            Type = TestType.Security,
-            Preconditions = new() { "Application is running", "Input fields are accessible" },
-            TestSteps = new()
+            // Input validation security tests
+            var inputValidationStopwatch = Stopwatch.StartNew();
+            securityTests.Add(new TestCase
             {
-                new() { StepNumber = 1, Action = "Navigate to input form", ExpectedResult = "Form loads successfully" },
-                new() { StepNumber = 2, Action = "Enter SQL injection payload: ' OR '1'='1", ExpectedResult = "Input is sanitized or rejected" },
-                new() { StepNumber = 3, Action = "Submit form", ExpectedResult = "No database error occurs, input is safely handled" }
-            },
-            ExpectedResults = new() { "No SQL injection is successful", "Error handling is secure" },
-            Confidence = 0.9,
-            Source = "Security Analysis"
-        });
+                Id = $"SEC_{testId++:D3}",
+                Title = "SQL Injection Prevention Test",
+                Description = "Verify system prevents SQL injection attacks through input validation",
+                Priority = "High",
+                Category = TestCategoryType.Security,
+                Type = TestType.Security,
+                Preconditions = new() { "Application is running", "Input fields are accessible" },
+                TestSteps = new()
+                {
+                    new() { StepNumber = 1, Action = "Navigate to input form", ExpectedResult = "Form loads successfully" },
+                    new() { StepNumber = 2, Action = "Enter SQL injection payload: ' OR '1'='1", ExpectedResult = "Input is sanitized or rejected" },
+                    new() { StepNumber = 3, Action = "Submit form", ExpectedResult = "No database error occurs, input is safely handled" }
+                },
+                ExpectedResults = new() { "No SQL injection is successful", "Error handling is secure" },
+                Confidence = 0.9,
+                Source = "Security Analysis"
+            });
 
-        // XSS prevention tests
-        securityTests.Add(new TestCase
-        {
-            Id = $"SEC_{testId++:D3}",
-            Title = "Cross-Site Scripting (XSS) Prevention Test",
-            Description = "Verify system prevents XSS attacks through proper input sanitization",
-            Priority = "High",
-            Category = TestCategoryType.Security,
-            Type = TestType.Security,
-            Preconditions = new() { "Application is running", "Input fields are accessible" },
-            TestSteps = new()
+            // XSS prevention tests
+            securityTests.Add(new TestCase
             {
-                new() { StepNumber = 1, Action = "Navigate to input form", ExpectedResult = "Form loads successfully" },
-                new() { StepNumber = 2, Action = "Enter XSS payload: <script>alert('XSS')</script>", ExpectedResult = "Input is sanitized" },
-                new() { StepNumber = 3, Action = "Submit and view output", ExpectedResult = "Script is not executed, content is safely displayed" }
-            },
-            ExpectedResults = new() { "XSS payload is neutralized", "No script execution occurs" },
-            Confidence = 0.9,
-            Source = "Security Analysis"
-        });
+                Id = $"SEC_{testId++:D3}",
+                Title = "Cross-Site Scripting (XSS) Prevention Test",
+                Description = "Verify system prevents XSS attacks through proper input sanitization",
+                Priority = "High",
+                Category = TestCategoryType.Security,
+                Type = TestType.Security,
+                Preconditions = new() { "Application is running", "Input fields are accessible" },
+                TestSteps = new()
+                {
+                    new() { StepNumber = 1, Action = "Navigate to input form", ExpectedResult = "Form loads successfully" },
+                    new() { StepNumber = 2, Action = "Enter XSS payload: <script>alert('XSS')</script>", ExpectedResult = "Input is sanitized" },
+                    new() { StepNumber = 3, Action = "Submit and view output", ExpectedResult = "Script is not executed, content is safely displayed" }
+                },
+                ExpectedResults = new() { "XSS payload is neutralized", "No script execution occurs" },
+                Confidence = 0.9,
+                Source = "Security Analysis"
+            });
+            inputValidationStopwatch.Stop();
 
-        // Authentication and authorization tests
-        if (data.Description.Contains("login", StringComparison.OrdinalIgnoreCase) || 
-            data.Description.Contains("auth", StringComparison.OrdinalIgnoreCase))
-        {
-            securityTests.AddRange(GenerateAuthenticationSecurityTests(data, ref testId));
+            operationLogger?.LogInformation("Input validation security tests generated {@Metrics}", new {
+                correlationId,
+                inputValidationTestCount = 2,
+                inputValidationTimeMs = inputValidationStopwatch.TotalMilliseconds,
+                owaspCoverage = new[] { "SQL_Injection", "XSS" }
+            });
+
+            // Authentication and authorization tests
+            var authStopwatch = Stopwatch.StartNew();
+            var authStartCount = securityTests.Count;
+            if (data.Description.Contains("login", StringComparison.OrdinalIgnoreCase) || 
+                data.Description.Contains("auth", StringComparison.OrdinalIgnoreCase))
+            {
+                securityTests.AddRange(GenerateAuthenticationSecurityTests(data, ref testId, operationLogger, correlationId));
+            }
+            authStopwatch.Stop();
+
+            operationLogger?.LogInformation("Authentication security tests generated {@Metrics}", new {
+                correlationId,
+                authTestCount = securityTests.Count - authStartCount,
+                authTestGenerationTimeMs = authStopwatch.TotalMilliseconds,
+                authContextDetected = data.Description.Contains("auth", StringComparison.OrdinalIgnoreCase)
+            });
+
+            // Session management tests
+            var sessionStopwatch = Stopwatch.StartNew();
+            var sessionStartCount = securityTests.Count;
+            securityTests.AddRange(GenerateSessionSecurityTests(data, ref testId, operationLogger, correlationId));
+            sessionStopwatch.Stop();
+
+            stopwatch.Stop();
+
+            var securityCoverage = CalculateSecurityCoverage(securityTests);
+
+            operationLogger?.LogInformation("Security test generation completed {@Metrics}", new {
+                correlationId,
+                method = "GenerateSecurityTestScenarios",
+                processingTimeMs = stopwatch.TotalMilliseconds,
+                totalSecurityTests = securityTests.Count,
+                testBreakdown = new {
+                    inputValidationTests = 2,
+                    authenticationTests = securityTests.Count - authStartCount - (securityTests.Count - sessionStartCount),
+                    sessionManagementTests = securityTests.Count - sessionStartCount
+                },
+                securityCoverage,
+                averageConfidence = securityTests.Count > 0 ? Math.Round(securityTests.Average(t => t.Confidence), 2) : 0,
+                owaspTop10Coverage = CalculateOwaspCoverage(securityTests),
+                riskMitigation = "high",
+                success = true
+            });
+
+            return securityTests;
         }
-
-        // Session management tests
-        securityTests.AddRange(GenerateSessionSecurityTests(data, ref testId));
-
-        return securityTests;
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            operationLogger?.LogError(ex, "Security test generation failed {@ErrorContext}", new {
+                correlationId,
+                method = "GenerateSecurityTestScenarios",
+                processingTimeMs = stopwatch.TotalMilliseconds,
+                error = ex.Message,
+                partialTestCount = securityTests.Count,
+                securityPhase = "input_validation_or_authentication",
+                recommendation = "Review security assessment logic and authentication context detection"
+            });
+            throw;
+        }
     }
 
     /// <summary>
     /// Generates accessibility test scenarios for WCAG compliance
     /// </summary>
-    public List<TestCase> GenerateAccessibilityTestScenarios(ParsedJiraData data)
+    public List<TestCase> GenerateAccessibilityTestScenarios(ParsedJiraData data, ILogger? logger = null, string correlationId = "")
     {
+        var stopwatch = Stopwatch.StartNew();
+        var operationLogger = logger ?? _staticLogger ?? _logger;
+
+        operationLogger?.LogInformation("Accessibility test generation initiated {@Metrics}", new {
+            correlationId,
+            method = "GenerateAccessibilityTestScenarios",
+            accessibilityAssessment = new {
+                uiComponentCount = data.UIComponents?.Count ?? 0,
+                wcagComplianceLevel = "AA",
+                expectedA11yTests = 3,
+                hasInteractiveElements = data.UIComponents.Any(c => new[] { "button", "input", "form", "dropdown" }.Contains(c.Type.ToLower()))
+            }
+        });
+
         var accessibilityTests = new List<TestCase>();
         var testId = 1;
 
-        // Screen reader compatibility tests
-        accessibilityTests.Add(new TestCase
+        try
         {
-            Id = $"A11Y_{testId++:D3}",
-            Title = "Screen Reader Navigation Test",
-            Description = "Verify all interactive elements are accessible via screen reader",
-            Priority = "Medium",
-            Category = TestCategoryType.Accessibility,
-            Type = TestType.Positive,
-            Preconditions = new() { "Screen reader software is installed", "Application is running" },
-            TestSteps = new()
+            // Screen reader compatibility tests
+            var screenReaderStopwatch = Stopwatch.StartNew();
+            accessibilityTests.Add(new TestCase
             {
-                new() { StepNumber = 1, Action = "Enable screen reader", ExpectedResult = "Screen reader starts successfully" },
-                new() { StepNumber = 2, Action = "Navigate through all interactive elements", ExpectedResult = "All elements are announced correctly" },
-                new() { StepNumber = 3, Action = "Verify ARIA labels and roles", ExpectedResult = "Semantic information is provided" }
-            },
-            ExpectedResults = new() { "All UI elements are accessible", "Proper ARIA implementation" },
-            Confidence = 0.85,
-            Source = "Accessibility Analysis"
-        });
+                Id = $"A11Y_{testId++:D3}",
+                Title = "Screen Reader Navigation Test",
+                Description = "Verify all interactive elements are accessible via screen reader",
+                Priority = "Medium",
+                Category = TestCategoryType.Accessibility,
+                Type = TestType.Positive,
+                Preconditions = new() { "Screen reader software is installed", "Application is running" },
+                TestSteps = new()
+                {
+                    new() { StepNumber = 1, Action = "Enable screen reader", ExpectedResult = "Screen reader starts successfully" },
+                    new() { StepNumber = 2, Action = "Navigate through all interactive elements", ExpectedResult = "All elements are announced correctly" },
+                    new() { StepNumber = 3, Action = "Verify ARIA labels and roles", ExpectedResult = "Semantic information is provided" }
+                },
+                ExpectedResults = new() { "All UI elements are accessible", "Proper ARIA implementation" },
+                Confidence = 0.85,
+                Source = "Accessibility Analysis"
+            });
+            screenReaderStopwatch.Stop();
 
-        // Keyboard navigation tests
-        accessibilityTests.Add(new TestCase
+            // Keyboard navigation tests
+            var keyboardStopwatch = Stopwatch.StartNew();
+            accessibilityTests.Add(new TestCase
+            {
+                Id = $"A11Y_{testId++:D3}",
+                Title = "Keyboard Navigation Test",
+                Description = "Verify all functionality is accessible via keyboard only",
+                Priority = "Medium",
+                Category = TestCategoryType.Accessibility,
+                Type = TestType.Positive,
+                Preconditions = new() { "Application is running", "No mouse/pointer device used" },
+                TestSteps = new()
+                {
+                    new() { StepNumber = 1, Action = "Use Tab key to navigate", ExpectedResult = "Focus moves logically through elements" },
+                    new() { StepNumber = 2, Action = "Use Enter/Space to activate elements", ExpectedResult = "Actions are triggered correctly" },
+                    new() { StepNumber = 3, Action = "Use Escape key for dialogs", ExpectedResult = "Modal dialogs close properly" }
+                },
+                ExpectedResults = new() { "Full keyboard accessibility", "Logical focus management" },
+                Confidence = 0.9,
+                Source = "Accessibility Analysis"
+            });
+            keyboardStopwatch.Stop();
+
+            // Color contrast tests
+            var contrastStopwatch = Stopwatch.StartNew();
+            accessibilityTests.Add(new TestCase
+            {
+                Id = $"A11Y_{testId++:D3}",
+                Title = "Color Contrast Compliance Test",
+                Description = "Verify color contrast meets WCAG AA standards",
+                Priority = "Medium",
+                Category = TestCategoryType.Accessibility,
+                Type = TestType.Positive,
+                Preconditions = new() { "Color contrast analyzer tool available", "Application is running" },
+                TestSteps = new()
+                {
+                    new() { StepNumber = 1, Action = "Analyze text/background color combinations", ExpectedResult = "Tool measures contrast ratios" },
+                    new() { StepNumber = 2, Action = "Verify minimum 4.5:1 ratio for normal text", ExpectedResult = "Contrast meets WCAG AA requirements" },
+                    new() { StepNumber = 3, Action = "Verify minimum 3:1 ratio for large text", ExpectedResult = "Large text contrast is adequate" }
+                },
+                ExpectedResults = new() { "All text meets contrast requirements", "No accessibility barriers" },
+                Confidence = 0.8,
+                Source = "Accessibility Analysis"
+            });
+            contrastStopwatch.Stop();
+
+            stopwatch.Stop();
+
+            var wcagCoverage = CalculateWcagCoverage(accessibilityTests);
+
+            operationLogger?.LogInformation("Accessibility test generation completed {@Metrics}", new {
+                correlationId,
+                method = "GenerateAccessibilityTestScenarios",
+                processingTimeMs = stopwatch.TotalMilliseconds,
+                totalA11yTests = accessibilityTests.Count,
+                testBreakdown = new {
+                    screenReaderTests = 1,
+                    keyboardNavigationTests = 1,
+                    colorContrastTests = 1
+                },
+                wcagCoverage,
+                averageConfidence = Math.Round(accessibilityTests.Average(t => t.Confidence), 2),
+                complianceLevel = "WCAG_AA",
+                testGenerationTiming = new {
+                    screenReaderTimeMs = screenReaderStopwatch.TotalMilliseconds,
+                    keyboardTimeMs = keyboardStopwatch.TotalMilliseconds,
+                    contrastTimeMs = contrastStopwatch.TotalMilliseconds
+                },
+                accessibilityQuality = "comprehensive",
+                success = true
+            });
+
+            return accessibilityTests;
+        }
+        catch (Exception ex)
         {
-            Id = $"A11Y_{testId++:D3}",
-            Title = "Keyboard Navigation Test",
-            Description = "Verify all functionality is accessible via keyboard only",
-            Priority = "Medium",
-            Category = TestCategoryType.Accessibility,
-            Type = TestType.Positive,
-            Preconditions = new() { "Application is running", "No mouse/pointer device used" },
-            TestSteps = new()
-            {
-                new() { StepNumber = 1, Action = "Use Tab key to navigate", ExpectedResult = "Focus moves logically through elements" },
-                new() { StepNumber = 2, Action = "Use Enter/Space to activate elements", ExpectedResult = "Actions are triggered correctly" },
-                new() { StepNumber = 3, Action = "Use Escape key for dialogs", ExpectedResult = "Modal dialogs close properly" }
-            },
-            ExpectedResults = new() { "Full keyboard accessibility", "Logical focus management" },
-            Confidence = 0.9,
-            Source = "Accessibility Analysis"
-        });
-
-        // Color contrast tests
-        accessibilityTests.Add(new TestCase
-        {
-            Id = $"A11Y_{testId++:D3}",
-            Title = "Color Contrast Compliance Test",
-            Description = "Verify color contrast meets WCAG AA standards",
-            Priority = "Medium",
-            Category = TestCategoryType.Accessibility,
-            Type = TestType.Positive,
-            Preconditions = new() { "Color contrast analyzer tool available", "Application is running" },
-            TestSteps = new()
-            {
-                new() { StepNumber = 1, Action = "Analyze text/background color combinations", ExpectedResult = "Tool measures contrast ratios" },
-                new() { StepNumber = 2, Action = "Verify minimum 4.5:1 ratio for normal text", ExpectedResult = "Contrast meets WCAG AA requirements" },
-                new() { StepNumber = 3, Action = "Verify minimum 3:1 ratio for large text", ExpectedResult = "Large text contrast is adequate" }
-            },
-            ExpectedResults = new() { "All text meets contrast requirements", "No accessibility barriers" },
-            Confidence = 0.8,
-            Source = "Accessibility Analysis"
-        });
-
-        return accessibilityTests;
+            stopwatch.Stop();
+            operationLogger?.LogError(ex, "Accessibility test generation failed {@ErrorContext}", new {
+                correlationId,
+                method = "GenerateAccessibilityTestScenarios",
+                processingTimeMs = stopwatch.TotalMilliseconds,
+                error = ex.Message,
+                partialTestCount = accessibilityTests.Count,
+                a11yPhase = "wcag_compliance_generation",
+                recommendation = "Review WCAG guidelines and accessibility test patterns"
+            });
+            throw;
+        }
     }
 
     /// <summary>
     /// Generates performance test scenarios
     /// </summary>
-    public List<TestCase> GeneratePerformanceTestScenarios(ParsedJiraData data)
+    public List<TestCase> GeneratePerformanceTestScenarios(ParsedJiraData data, ILogger? logger = null, string correlationId = "")
     {
         var performanceTests = new List<TestCase>();
         var testId = 1;
@@ -408,7 +818,7 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
     /// <summary>
     /// Generates boundary test scenarios
     /// </summary>
-    public List<TestCase> GenerateBoundaryTestScenarios(ParsedJiraData data)
+    public List<TestCase> GenerateBoundaryTestScenarios(ParsedJiraData data, ILogger? logger = null, string correlationId = "")
     {
         var boundaryTests = new List<TestCase>();
         var testId = 1;
@@ -466,7 +876,7 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
     /// <summary>
     /// Generates error handling test scenarios
     /// </summary>
-    public List<TestCase> GenerateErrorHandlingTestScenarios(ParsedJiraData data)
+    public List<TestCase> GenerateErrorHandlingTestScenarios(ParsedJiraData data, ILogger? logger = null, string correlationId = "")
     {
         var errorTests = new List<TestCase>();
         var testId = 1;
@@ -519,7 +929,7 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
     /// <summary>
     /// Generates integration test scenarios
     /// </summary>
-    public List<TestCase> GenerateIntegrationTestScenarios(ParsedJiraData data)
+    public List<TestCase> GenerateIntegrationTestScenarios(ParsedJiraData data, ILogger? logger = null, string correlationId = "")
     {
         var integrationTests = new List<TestCase>();
         var testId = 1;
@@ -573,7 +983,7 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
     /// <summary>
     /// Generates user experience test scenarios
     /// </summary>
-    public List<TestCase> GenerateUserExperienceTestScenarios(ParsedJiraData data)
+    public List<TestCase> GenerateUserExperienceTestScenarios(ParsedJiraData data, ILogger? logger = null, string correlationId = "")
     {
         var uxTests = new List<TestCase>();
         var testId = 1;
@@ -627,7 +1037,7 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
     /// <summary>
     /// Generates data validation test scenarios
     /// </summary>
-    public List<TestCase> GenerateDataValidationTestScenarios(ParsedJiraData data)
+    public List<TestCase> GenerateDataValidationTestScenarios(ParsedJiraData data, ILogger? logger = null, string correlationId = "")
     {
         var dataTests = new List<TestCase>();
         var testId = 1;
@@ -662,7 +1072,7 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
     /// <summary>
     /// Generates state management test scenarios
     /// </summary>
-    public List<TestCase> GenerateStateManagementTestScenarios(ParsedJiraData data)
+    public List<TestCase> GenerateStateManagementTestScenarios(ParsedJiraData data, ILogger? logger = null, string correlationId = "")
     {
         var stateTests = new List<TestCase>();
         var testId = 1;
@@ -693,10 +1103,14 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
 
     #region Helper Methods
 
-    private List<TestCase> RemoveDuplicateTestCases(List<TestCase> testCases)
+    private List<TestCase> RemoveDuplicateTestCases(List<TestCase> testCases, ILogger? logger = null, string correlationId = "")
     {
+        var operationLogger = logger ?? _staticLogger ?? _logger;
+        var stopwatch = Stopwatch.StartNew();
+
         var uniqueTests = new List<TestCase>();
         var seenTitles = new HashSet<string>();
+        var duplicateCount = 0;
 
         foreach (var testCase in testCases)
         {
@@ -706,13 +1120,31 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
                 seenTitles.Add(key);
                 uniqueTests.Add(testCase);
             }
+            else
+            {
+                duplicateCount++;
+            }
         }
+
+        stopwatch.Stop();
+
+        operationLogger?.LogInformation("Duplicate test removal processed {@Metrics}", new {
+            correlationId,
+            originalCount = testCases.Count,
+            uniqueCount = uniqueTests.Count,
+            duplicatesRemoved = duplicateCount,
+            processingTimeMs = stopwatch.TotalMilliseconds,
+            efficiency = testCases.Count > 0 ? Math.Round((double)duplicateCount / testCases.Count * 100, 2) : 0
+        });
 
         return uniqueTests;
     }
 
-    private void ValidateTestCaseCoverage(EnhancedTestSuite suite, ParsedJiraData data)
+    private void ValidateTestCaseCoverage(EnhancedTestSuite suite, ParsedJiraData data, ILogger? logger = null, string correlationId = "")
     {
+        var operationLogger = logger ?? _staticLogger ?? _logger;
+        var stopwatch = Stopwatch.StartNew();
+
         var summary = suite.CoverageSummary;
         
         // Count tests by category
@@ -732,10 +1164,140 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
         var totalPossibleTests = 50; // Estimated based on complexity
         summary.CoveragePercentage = Math.Min(100m, (suite.TotalTestCount / (decimal)totalPossibleTests) * 100);
 
+        stopwatch.Stop();
+
+        operationLogger?.LogInformation("Test coverage validation completed {@Metrics}", new {
+            correlationId,
+            coveragePercentage = summary.CoveragePercentage,
+            totalTestCount = suite.TotalTestCount,
+            categoryDistribution = new {
+                positive = summary.PositiveTestCount,
+                negative = summary.NegativeTestCount,
+                security = summary.SecurityTestCount,
+                accessibility = summary.AccessibilityTestCount,
+                performance = summary.PerformanceTestCount,
+                boundary = summary.BoundaryTestCount,
+                errorHandling = summary.ErrorHandlingTestCount,
+                integration = summary.IntegrationTestCount,
+                userExperience = summary.UserExperienceTestCount,
+                dataValidation = summary.DataValidationTestCount,
+                stateManagement = summary.StateManagementTestCount
+            },
+            validationTimeMs = stopwatch.TotalMilliseconds,
+            coverageQuality = summary.CoveragePercentage > 80 ? "excellent" : summary.CoveragePercentage > 60 ? "good" : "needs_improvement"
+        });
+
         _logger.LogInformation("Test coverage validation completed: {Coverage}%", summary.CoveragePercentage);
     }
 
-    private List<TestCase> GenerateInputNegativeTests(UIComponent component, ParsedJiraData data, ref int testId)
+    private static int CalculateComplexityScore(ParsedJiraData data)
+    {
+        var score = 0;
+        score += (data.UIComponents?.Count ?? 0) * 2;
+        score += (data.BusinessLogic?.Count ?? 0) * 3;
+        score += (data.Description?.Length ?? 0) / 100;
+        return Math.Min(score, 100);
+    }
+
+    private static string CalculateEnhancementQuality(EnhancedTestSuite suite, List<TestCase> originalTests)
+    {
+        var enhancementRatio = originalTests.Count > 0 ? (double)suite.EnhancedTests.Count / originalTests.Count : 0;
+        var coverageScore = (double)suite.CoverageSummary.CoveragePercentage;
+        
+        if (enhancementRatio > 3 && coverageScore > 80) return "excellent";
+        if (enhancementRatio > 2 && coverageScore > 60) return "good";
+        if (enhancementRatio > 1 && coverageScore > 40) return "adequate";
+        return "needs_improvement";
+    }
+
+    private static string CalculateTestGenerationQuality(List<TestCase> tests)
+    {
+        if (tests.Count == 0) return "no_tests_generated";
+        
+        var avgConfidence = tests.Average(t => t.Confidence);
+        var testVariety = tests.GroupBy(t => t.Category).Count();
+        
+        if (avgConfidence > 0.8 && testVariety > 3) return "high";
+        if (avgConfidence > 0.6 && testVariety > 2) return "medium";
+        return "low";
+    }
+
+    private static string CalculateSecurityRiskLevel(ParsedJiraData data)
+    {
+        var riskScore = 0;
+        if (data.UIComponents.Any(c => c.Type.ToLower() == "input")) riskScore += 2;
+        if (data.Description.Contains("auth", StringComparison.OrdinalIgnoreCase)) riskScore += 3;
+        if (data.Description.Contains("database", StringComparison.OrdinalIgnoreCase)) riskScore += 2;
+        if (data.Description.Contains("api", StringComparison.OrdinalIgnoreCase)) riskScore += 1;
+        
+        return riskScore switch
+        {
+            >= 6 => "high",
+            >= 3 => "medium",
+            _ => "low"
+        };
+    }
+
+    private static string CalculateSecurityCoverage(List<TestCase> securityTests)
+    {
+        var owaspCategories = new[] { "injection", "xss", "authentication", "session" };
+        var coveredCategories = securityTests.Count(t => 
+            owaspCategories.Any(cat => t.Title.ToLower().Contains(cat) || t.Description.ToLower().Contains(cat)));
+        
+        var coveragePercentage = (double)coveredCategories / owaspCategories.Length * 100;
+        
+        return coveragePercentage switch
+        {
+            >= 75 => "comprehensive",
+            >= 50 => "adequate",
+            _ => "basic"
+        };
+    }
+
+    private static string CalculateOwaspCoverage(List<TestCase> securityTests)
+    {
+        var owaspTop10 = new[] { "injection", "authentication", "sensitive_data", "xxe", "access_control", 
+                                "security_misconfiguration", "xss", "deserialization", "components", "logging" };
+        
+        var coveredItems = owaspTop10.Count(item => 
+            securityTests.Any(t => t.Title.ToLower().Contains(item) || t.Description.ToLower().Contains(item)));
+        
+        return $"{coveredItems}/{owaspTop10.Length}";
+    }
+
+    private static string CalculateWcagCoverage(List<TestCase> a11yTests)
+    {
+        var wcagPrinciples = new[] { "perceivable", "operable", "understandable", "robust" };
+        var testTypes = new[] { "screen_reader", "keyboard", "contrast", "aria" };
+        
+        var coverageScore = testTypes.Count(type => 
+            a11yTests.Any(t => t.Title.ToLower().Contains(type.Replace("_", " "))));
+        
+        return $"{coverageScore}/{testTypes.Length}";
+    }
+
+    private static double CalculateInferenceAccuracy(List<string> matchedTriggers, string content)
+    {
+        if (string.IsNullOrEmpty(content) || !matchedTriggers.Any()) return 0.0;
+        
+        var contentWords = content.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var relevantMatches = matchedTriggers.Count(trigger => 
+            contentWords.Any(word => word.ToLower().Contains(trigger.ToLower())));
+        
+        return matchedTriggers.Count > 0 ? (double)relevantMatches / matchedTriggers.Count : 0.0;
+    }
+
+    private static double CalculateCategoryConfidence(HashSet<TestCategory> categories, Dictionary<string, int> keywordMatches)
+    {
+        if (!categories.Any() || !keywordMatches.Any()) return 0.0;
+        
+        var totalMatches = keywordMatches.Values.Sum();
+        var avgMatchesPerCategory = (double)totalMatches / categories.Count;
+        
+        return Math.Min(avgMatchesPerCategory / 3.0, 1.0); // Normalize to 0-1 scale
+    }
+
+    private List<TestCase> GenerateInputNegativeTests(UIComponent component, ParsedJiraData data, ref int testId, ILogger? logger = null, string correlationId = "")
     {
         var tests = new List<TestCase>();
 
@@ -762,7 +1324,7 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
         return tests;
     }
 
-    private List<TestCase> GenerateButtonNegativeTests(UIComponent component, ParsedJiraData data, ref int testId)
+    private List<TestCase> GenerateButtonNegativeTests(UIComponent component, ParsedJiraData data, ref int testId, ILogger? logger = null, string correlationId = "")
     {
         var tests = new List<TestCase>();
 
@@ -789,7 +1351,7 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
         return tests;
     }
 
-    private List<TestCase> GenerateDropdownNegativeTests(UIComponent component, ParsedJiraData data, ref int testId)
+    private List<TestCase> GenerateDropdownNegativeTests(UIComponent component, ParsedJiraData data, ref int testId, ILogger? logger = null, string correlationId = "")
     {
         var tests = new List<TestCase>();
 
@@ -816,7 +1378,7 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
         return tests;
     }
 
-    private List<TestCase> GenerateModalNegativeTests(UIComponent component, ParsedJiraData data, ref int testId)
+    private List<TestCase> GenerateModalNegativeTests(UIComponent component, ParsedJiraData data, ref int testId, ILogger? logger = null, string correlationId = "")
     {
         var tests = new List<TestCase>();
 
@@ -843,7 +1405,7 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
         return tests;
     }
 
-    private List<TestCase> GenerateBusinessLogicNegativeTests(BusinessLogic logic, ParsedJiraData data, ref int testId)
+    private List<TestCase> GenerateBusinessLogicNegativeTests(BusinessLogic logic, ParsedJiraData data, ref int testId, ILogger? logger = null, string correlationId = "")
     {
         var tests = new List<TestCase>();
 
@@ -870,7 +1432,7 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
         return tests;
     }
 
-    private List<TestCase> GenerateGeneralNegativeTests(ParsedJiraData data, ref int testId)
+    private List<TestCase> GenerateGeneralNegativeTests(ParsedJiraData data, ref int testId, ILogger? logger = null, string correlationId = "")
     {
         var tests = new List<TestCase>();
 
@@ -897,7 +1459,7 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
         return tests;
     }
 
-    private List<TestCase> GenerateAuthenticationSecurityTests(ParsedJiraData data, ref int testId)
+    private List<TestCase> GenerateAuthenticationSecurityTests(ParsedJiraData data, ref int testId, ILogger? logger = null, string correlationId = "")
     {
         var tests = new List<TestCase>();
 
@@ -924,7 +1486,7 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
         return tests;
     }
 
-    private List<TestCase> GenerateSessionSecurityTests(ParsedJiraData data, ref int testId)
+    private List<TestCase> GenerateSessionSecurityTests(ParsedJiraData data, ref int testId, ILogger? logger = null, string correlationId = "")
     {
         var tests = new List<TestCase>();
 
@@ -951,7 +1513,7 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
         return tests;
     }
 
-    private List<TestScenario> GeneratePotentialScenarios(ParsedJiraData data)
+    private List<TestScenario> GeneratePotentialScenarios(ParsedJiraData data, ILogger? logger = null, string correlationId = "")
     {
         var scenarios = new List<TestScenario>();
         var scenarioId = 1;
@@ -985,7 +1547,7 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
         return scenarios;
     }
 
-    private Task<TestCoverageMatrix> GenerateCoverageMatrix(ParsedJiraData data)
+    private Task<TestCoverageMatrix> GenerateCoverageMatrix(ParsedJiraData data, ILogger? logger = null, string correlationId = "")
     {
         var matrix = new TestCoverageMatrix();
 
@@ -1060,32 +1622,102 @@ public class LLMTestEnhancementService : ILLMTestEnhancementService
     /// <returns>Array of inferred test categories</returns>
     public TestCategory[] InferTestCategoriesFromSemanticContext(string content)
     {
-        var inferredCategories = new HashSet<TestCategory>();
-        var lowercaseContent = content.ToLower();
+        var correlationId = Guid.NewGuid().ToString("N")[..8];
+        var stopwatch = Stopwatch.StartNew();
+        var operationLogger = _staticLogger ?? _logger;
 
-        foreach (var trigger in _semanticTriggers)
+        operationLogger?.LogInformation("Semantic analysis initiated {@Metrics}", new {
+            correlationId,
+            method = "InferTestCategoriesFromSemanticContext",
+            contentAnalysis = new {
+                contentLength = content?.Length ?? 0,
+                wordCount = content?.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length ?? 0,
+                triggerRuleCount = _semanticTriggers.Count
+            }
+        });
+
+        try
         {
-            var keywords = trigger.Key;
-            var categories = trigger.Value;
+            var inferredCategories = new HashSet<TestCategory>();
+            var lowercaseContent = content?.ToLower() ?? string.Empty;
+            var matchedTriggers = new List<string>();
+            var keywordMatches = new Dictionary<string, int>();
 
-            // Check if any of the keywords are present in the content
-            if (keywords.Any(keyword => lowercaseContent.Contains(keyword.ToLower())))
+            var analysisStopwatch = Stopwatch.StartNew();
+            foreach (var trigger in _semanticTriggers)
             {
-                foreach (var category in categories)
+                var keywords = trigger.Key;
+                var categories = trigger.Value;
+
+                // Check if any of the keywords are present in the content
+                var matchedKeywords = keywords.Where(keyword => lowercaseContent.Contains(keyword.ToLower())).ToArray();
+                if (matchedKeywords.Any())
                 {
-                    inferredCategories.Add(category);
+                    matchedTriggers.AddRange(matchedKeywords);
+                    foreach (var keyword in matchedKeywords)
+                    {
+                        keywordMatches[keyword] = keywordMatches.GetValueOrDefault(keyword, 0) + 1;
+                    }
+
+                    foreach (var category in categories)
+                    {
+                        inferredCategories.Add(category);
+                    }
                 }
             }
-        }
+            analysisStopwatch.Stop();
 
-        // Always include basic categories if none were inferred
-        if (!inferredCategories.Any())
+            // Always include basic categories if none were inferred
+            var fallbackApplied = false;
+            if (!inferredCategories.Any())
+            {
+                fallbackApplied = true;
+                inferredCategories.Add(TestCategory.DataValidation);
+                inferredCategories.Add(TestCategory.UserExperienceTests);
+            }
+
+            var inferenceAccuracy = CalculateInferenceAccuracy(matchedTriggers, content);
+            var categoryConfidence = CalculateCategoryConfidence(inferredCategories, keywordMatches);
+
+            stopwatch.Stop();
+
+            operationLogger?.LogInformation("Semantic analysis completed {@Metrics}", new {
+                correlationId,
+                method = "InferTestCategoriesFromSemanticContext",
+                processingTimeMs = stopwatch.TotalMilliseconds,
+                analysisTimeMs = analysisStopwatch.TotalMilliseconds,
+                semanticResults = new {
+                    inferredCategoryCount = inferredCategories.Count,
+                    matchedTriggerCount = matchedTriggers.Count,
+                    keywordMatchCount = keywordMatches.Count,
+                    fallbackApplied,
+                    inferenceAccuracy,
+                    categoryConfidence
+                },
+                categoryBreakdown = inferredCategories.Select(c => c.ToString()).ToArray(),
+                keywordMatches = keywordMatches.Take(5).ToDictionary(k => k.Key, k => k.Value),
+                semanticQuality = inferenceAccuracy > 0.7 ? "high" : inferenceAccuracy > 0.4 ? "medium" : "low",
+                success = true
+            });
+
+            return inferredCategories.ToArray();
+        }
+        catch (Exception ex)
         {
-            inferredCategories.Add(TestCategory.DataValidation);
-            inferredCategories.Add(TestCategory.UserExperienceTests);
+            stopwatch.Stop();
+            operationLogger?.LogError(ex, "Semantic analysis failed {@ErrorContext}", new {
+                correlationId,
+                method = "InferTestCategoriesFromSemanticContext",
+                processingTimeMs = stopwatch.TotalMilliseconds,
+                error = ex.Message,
+                contentLength = content?.Length ?? 0,
+                semanticPhase = "keyword_pattern_matching",
+                recommendation = "Review semantic trigger rules and content preprocessing"
+            });
+            
+            // Return fallback categories on error
+            return new[] { TestCategory.DataValidation, TestCategory.UserExperienceTests };
         }
-
-        return inferredCategories.ToArray();
     }
 
     /// <summary>
