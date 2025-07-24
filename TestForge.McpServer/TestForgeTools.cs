@@ -195,68 +195,49 @@ public static class TestForgeTools
     /// <returns>Enhanced test suite with comprehensive coverage</returns>
     [McpServerTool, Description("COMPREHENSIVE TEST ENHANCEMENT: Enhances initial test cases using LLM analysis for maximum coverage including negative, security, accessibility, performance, and boundary testing. Generates 10+ test categories with intelligent deduplication and TestRail-compatible output.")]
     public static async Task<string> EnhanceTestCasesWithLLM(
-        [Description("Parsed Jira XML data as JSON string")] string parsedXmlData,
-        [Description("Initial generated test cases as JSON string")] string initialTests,
-        [Description("Enhancement configuration specifying test categories")] string enhancementConfig = "")
+        [Description("Parsed Jira XML data")] ParsedJiraData parsedXmlData,
+        [Description("Initial generated test cases")] List<TestCase> initialTests,
+        [Description("Enhancement configuration specifying test categories")] TestEnhancementConfig enhancementConfig)
     {
         try
         {
-            // Add explicit parameter validation
-            if (string.IsNullOrWhiteSpace(parsedXmlData))
+            if (parsedXmlData == null)
             {
-                return JsonSerializer.Serialize(new { 
+                return JsonSerializer.Serialize(new {
                     error = "Missing required parameter: parsedXmlData",
                     method = nameof(EnhanceTestCasesWithLLM),
                     timestamp = DateTime.UtcNow,
-                    details = "The parsedXmlData parameter is required and cannot be null or empty"
+                    details = "The parsedXmlData parameter is required and cannot be null."
                 });
             }
-
-            if (string.IsNullOrWhiteSpace(initialTests))
+            if (initialTests == null)
             {
-                return JsonSerializer.Serialize(new { 
+                return JsonSerializer.Serialize(new {
                     error = "Missing required parameter: initialTests",
                     method = nameof(EnhanceTestCasesWithLLM),
                     timestamp = DateTime.UtcNow,
-                    details = "The initialTests parameter is required and cannot be null or empty"
+                    details = "The initialTests parameter is required and cannot be null."
                 });
             }
-
+            if (enhancementConfig == null)
+            {
+                enhancementConfig = new TestEnhancementConfig();
+            }
             if (_llmEnhancementService == null || _testRailFormattingService == null)
             {
-                return JsonSerializer.Serialize(new { 
-                    error = "LLM enhancement service not initialized. Please ensure proper dependency injection setup." 
+                return JsonSerializer.Serialize(new {
+                    error = "LLM enhancement service not initialized. Please ensure proper dependency injection setup."
                 });
             }
-
-            _logger?.LogInformation("Starting LLM-enhanced test case generation with data length: {DataLength}, tests length: {TestsLength}", 
-                parsedXmlData.Length, initialTests.Length);
-
-            // Parse input parameters
-            var parsedData = JsonSerializer.Deserialize<ParsedJiraData>(parsedXmlData);
-            var initialTestCases = JsonSerializer.Deserialize<List<TestCase>>(initialTests);
-            var config = string.IsNullOrEmpty(enhancementConfig) 
-                ? new TestEnhancementConfig() 
-                : JsonSerializer.Deserialize<TestEnhancementConfig>(enhancementConfig);
-
-            if (parsedData == null || initialTestCases == null || config == null)
-            {
-                return JsonSerializer.Serialize(new { 
-                    error = "Invalid input data. Please provide valid JSON for parsedXmlData, initialTests, and enhancementConfig." 
-                });
-            }
-
-            // Generate comprehensive enhanced test suite
-            var enhancedSuite = await _llmEnhancementService.EnhanceTestCases(parsedData, initialTestCases, config);
-
-            // Format output for TestRail compatibility
+            _logger?.LogInformation("Starting LLM-enhanced test case generation with test counts: {DataLength}, tests length: {TestsLength}",
+                initialTests.Count, initialTests.Count);
+            var enhancedSuite = await _llmEnhancementService.EnhanceTestCases(parsedXmlData, initialTests, enhancementConfig);
             var formattedOutput = await _testRailFormattingService.FormatEnhancedTestSuite(enhancedSuite);
-
             var result = new TestEnhancementResult
             {
                 Success = true,
                 Message = $"Successfully generated {enhancedSuite.TotalTestCount} comprehensive test cases",
-                OriginalTestCount = initialTestCases.Count,
+                OriginalTestCount = initialTests.Count,
                 EnhancedTestCount = enhancedSuite.EnhancedTests.Count,
                 TotalTestCount = enhancedSuite.TotalTestCount,
                 CoverageSummary = enhancedSuite.CoverageSummary,
@@ -264,10 +245,8 @@ public static class TestForgeTools
                 GenerationTimestamp = DateTime.UtcNow,
                 CategoryBreakdown = GenerateCategoryBreakdown(enhancedSuite)
             };
-
             _logger?.LogInformation("LLM enhancement completed: {TotalTests} tests generated with {CoveragePercentage}% coverage",
                 result.TotalTestCount, result.CoverageSummary.CoveragePercentage);
-
             return JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
         }
         catch (Exception ex)
@@ -289,40 +268,27 @@ public static class TestForgeTools
     /// <param name="parsedXmlData">Parsed Jira XML data as JSON string</param>
     /// <returns>Comprehensive test matrix with coverage analysis</returns>
     [McpServerTool, Description("COMPREHENSIVE TEST MATRIX: Generates a complete test matrix showing all possible test scenarios, coverage areas, and potential gaps. Use this to analyze test coverage potential before generating actual test cases.")]
-    public static async Task<string> GenerateComprehensiveTestMatrix([Description("Parsed Jira XML data as JSON string")] string parsedXmlData)
+    public static async Task<string> GenerateComprehensiveTestMatrix([Description("Parsed Jira XML data")] ParsedJiraData parsedXmlData)
     {
         try
         {
-            // Add explicit parameter validation
-            if (string.IsNullOrWhiteSpace(parsedXmlData))
+            if (parsedXmlData == null)
             {
                 return JsonSerializer.Serialize(new { 
                     error = "Missing required parameter: parsedXmlData",
                     method = nameof(GenerateComprehensiveTestMatrix),
                     timestamp = DateTime.UtcNow,
-                    details = "The parsedXmlData parameter is required and cannot be null or empty"
+                    details = "The parsedXmlData parameter is required and cannot be null."
                 });
             }
-
             if (_llmEnhancementService == null)
             {
                 return JsonSerializer.Serialize(new { 
                     error = "LLM enhancement service not initialized. Please ensure proper dependency injection setup." 
                 });
             }
-
-            _logger?.LogInformation("Starting comprehensive test matrix generation with data length: {DataLength}", parsedXmlData.Length);
-
-            var parsedData = JsonSerializer.Deserialize<ParsedJiraData>(parsedXmlData);
-            if (parsedData == null)
-            {
-                return JsonSerializer.Serialize(new { 
-                    error = "Invalid parsedXmlData. Please provide valid JSON." 
-                });
-            }
-
-            var testMatrix = await _llmEnhancementService.GenerateTestMatrix(parsedData);
-            
+            _logger?.LogInformation("Starting comprehensive test matrix generation with parsed data");
+            var testMatrix = await _llmEnhancementService.GenerateTestMatrix(parsedXmlData);
             return JsonSerializer.Serialize(testMatrix, new JsonSerializerOptions { WriteIndented = true });
         }
         catch (Exception ex)

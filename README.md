@@ -24,12 +24,34 @@ A comprehensive AI-powered test case generation platform built with .NET and Ang
 
 ### 🚀 **New Enhanced Capabilities**
 
-- **Semantic Keyword Mapping**: Audio/TTS → Performance tests, Data formats → Validation tests
-- **IVR Context Expansion**: Automatic variants for no-pin, athena, and availity IVR systems  
-- **Technical Content Parsing**: HTML within XML descriptions with HtmlAgilityPack
-- **Business Logic Extraction**: Pattern-based conditional logic and fallback path analysis
-- **Performance Triggers**: Domain-aware performance test generation (latency, load, stress)
-- **Comprehensive Test Matrix**: 14-category coverage analysis with gap identification
+
+## ⚡️ Strongly Typed Parameters (2025 Update)
+
+All MCP server tools now require strongly typed parameter objects. Manual JSON string validation and deserialization are no longer needed or supported. Pass structured objects matching the method signatures.
+
+**Example:**
+```json
+{
+  "name": "generate_comprehensive_test_suite",
+  "arguments": {
+    "jiraXml": "<item>...</item>",
+    "enhancementConfig": ""
+  }
+}
+```
+
+**Obsolete:**
+- Passing raw JSON strings or manually serialized objects
+- Manual validation/deserialization in client code
+
+**Error Handling:**
+- All tools now provide robust error messages for missing/invalid parameters
+- Logging is improved for diagnostics
+
+**Migration Note:**
+- Update any client/service code to use structured objects for all tool calls
+
+**See API schema and instructions for updated examples.**
 
 ### 📊 **Enhanced Confidence Scoring System**
 
