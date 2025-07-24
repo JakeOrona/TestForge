@@ -195,13 +195,13 @@ public static class TestForgeTools
     /// <returns>Enhanced test suite with comprehensive coverage</returns>
     [McpServerTool, Description("COMPREHENSIVE TEST ENHANCEMENT: Enhances initial test cases using LLM analysis for maximum coverage including negative, security, accessibility, performance, and boundary testing. Generates 10+ test categories with intelligent deduplication and TestRail-compatible output.")]
     public static async Task<string> EnhanceTestCasesWithLLM(
-        [Description("Parsed Jira XML data")] ParsedJiraData parsedXmlData,
+        [Description("Raw Jira XML string OR Parsed Jira JSON string")] string parsedXmlData,
         [Description("Initial generated test cases")] List<TestCase> initialTests,
         [Description("Enhancement configuration specifying test categories")] TestEnhancementConfig enhancementConfig)
     {
         try
         {
-            if (parsedXmlData == null)
+            if (string.IsNullOrWhiteSpace(parsedXmlData))
             {
                 return JsonSerializer.Serialize(new {
                     error = "Missing required parameter: parsedXmlData",
@@ -229,9 +229,103 @@ public static class TestForgeTools
                     error = "LLM enhancement service not initialized. Please ensure proper dependency injection setup."
                 });
             }
+            // Detect input type: XML or JSON
+            ParsedJiraData? parsedData = null;
+            var inputTrimmed = parsedXmlData.TrimStart();
+            if (inputTrimmed.StartsWith("<"))
+            {
+                // Treat as XML
+                _logger?.LogInformation("EnhanceTestCasesWithLLM: Detected XML input, parsing to ParsedJiraData");
+                parsedData = JiraXmlAnalysisService.ConvertXmlToParsedJiraData(parsedXmlData);
+            }
+            else
+            {
+                // Treat as JSON
+                _logger?.LogInformation("EnhanceTestCasesWithLLM: Detected JSON input, validating and mapping to ParsedJiraData");
+                try
+                {
+                    var jsonDoc = JsonDocument.Parse(parsedXmlData);
+                    var root = jsonDoc.RootElement;
+                    // Accept either a top-level object or a wrapped object (e.g., { "key": ... })
+                    string key = root.TryGetProperty("key", out var keyProp) ? keyProp.GetString() ?? "" :
+                        root.TryGetProperty("TicketId", out var ticketIdProp) ? ticketIdProp.GetString() ?? "" : "";
+                    string summary = root.TryGetProperty("summary", out var summaryProp) ? summaryProp.GetString() ?? "" :
+                        root.TryGetProperty("Summary", out var summaryProp2) ? summaryProp2.GetString() ?? "" : "";
+                    string description = root.TryGetProperty("description", out var descProp) ? descProp.GetString() ?? "" :
+                        root.TryGetProperty("Description", out var descProp2) ? descProp2.GetString() ?? "" : "";
+                    string type = root.TryGetProperty("type", out var typeProp) ? typeProp.GetString() ?? "" :
+                        root.TryGetProperty("Type", out var typeProp2) ? typeProp2.GetString() ?? "" : "";
+                    string priority = root.TryGetProperty("priority", out var priorityProp) ? priorityProp.GetString() ?? "" :
+                        root.TryGetProperty("Priority", out var priorityProp2) ? priorityProp2.GetString() ?? "" : "";
+                    List<string> acceptanceCriteria = new List<string>();
+                    if (root.TryGetProperty("acceptanceCriteria", out var acProp) && acProp.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var item in acProp.EnumerateArray())
+                        {
+                            if (item.ValueKind == JsonValueKind.String)
+                                acceptanceCriteria.Add(item.GetString() ?? "");
+                        }
+                    }
+                    double complexityScore = 0.0;
+                    if (root.TryGetProperty("complexityScore", out var csProp) && csProp.ValueKind == JsonValueKind.Number)
+                        complexityScore = csProp.GetDouble();
+                    else if (root.TryGetProperty("ComplexityScore", out var csProp2) && csProp2.ValueKind == JsonValueKind.Number)
+                        complexityScore = csProp2.GetDouble();
+                    // If all required fields are missing, log and error
+                    if (string.IsNullOrEmpty(key) && string.IsNullOrEmpty(summary) && string.IsNullOrEmpty(description))
+                    {
+                        _logger?.LogError("ParsedJiraData JSON missing required fields. Expected keys: key, summary, description, type, priority, acceptanceCriteria, complexityScore. Received: {Json}", parsedXmlData);
+                        return JsonSerializer.Serialize(new {
+                            error = "ParsedJiraData JSON missing required fields.",
+                            expectedSchema = new[] { "key", "summary", "description", "type", "priority", "acceptanceCriteria", "complexityScore" },
+                            received = parsedXmlData
+                        });
+                    }
+                    parsedData = new ParsedJiraData
+                    {
+                        TicketId = key,
+                        Summary = summary,
+                        Description = description,
+                        Type = type,
+                        Priority = priority,
+                        AcceptanceCriteria = acceptanceCriteria,
+                        ComplexityScore = complexityScore
+                    };
+                }
+                catch (JsonException jsonEx)
+                {
+                    _logger?.LogError(jsonEx, "Failed to parse parsedXmlData as JSON");
+                    return JsonSerializer.Serialize(new {
+                        error = "Failed to parse parsedXmlData as JSON.",
+                        details = jsonEx.Message,
+                        expectedSchema = new[] { "key", "summary", "description", "type", "priority", "acceptanceCriteria", "complexityScore" },
+                        received = parsedXmlData
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Unexpected error mapping parsedXmlData to ParsedJiraData");
+                    return JsonSerializer.Serialize(new {
+                        error = "Unexpected error mapping parsedXmlData to ParsedJiraData.",
+                        details = ex.Message,
+                        received = parsedXmlData
+                    });
+                }
+            }
+
+            if (parsedData == null)
+            {
+                return JsonSerializer.Serialize(new {
+                    error = "Unable to parse parsedXmlData to ParsedJiraData.",
+                    method = nameof(EnhanceTestCasesWithLLM),
+                    timestamp = DateTime.UtcNow,
+                    details = "Input could not be parsed as either XML or JSON."
+                });
+            }
+
             _logger?.LogInformation("Starting LLM-enhanced test case generation with test counts: {DataLength}, tests length: {TestsLength}",
                 initialTests.Count, initialTests.Count);
-            var enhancedSuite = await _llmEnhancementService.EnhanceTestCases(parsedXmlData, initialTests, enhancementConfig);
+            var enhancedSuite = await _llmEnhancementService.EnhanceTestCases(parsedData, initialTests, enhancementConfig);
             var formattedOutput = await _testRailFormattingService.FormatEnhancedTestSuite(enhancedSuite);
             var result = new TestEnhancementResult
             {
@@ -578,6 +672,31 @@ public static class TestForgeTools
     }
 
     /// <summary>
+    /// Utility to normalize testCases JSON to an array format for confidence validation
+    /// </summary>
+    private static string NormalizeTestCasesJson(string testCasesJson)
+    {
+        try
+        {
+            var doc = JsonDocument.Parse(testCasesJson);
+            if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                return testCasesJson;
+            if (doc.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                var arr = doc.RootElement.EnumerateObject()
+                    .Select(p => p.Value)
+                    .ToArray();
+                return JsonSerializer.Serialize(arr);
+            }
+        }
+        catch
+        {
+            // Fallback: return as-is
+        }
+        return testCasesJson;
+    }
+
+    /// <summary>
     /// Validates generated test cases against original analysis and provides final confidence scoring with LLM validation
     /// </summary>
     /// <param name="testCases">Generated test cases as JSON string</param>
@@ -617,6 +736,9 @@ public static class TestForgeTools
                 });
             }
 
+            // Normalize testCases to array format
+            var normalizedTestCases = NormalizeTestCasesJson(testCases);
+
             // Parse baseline confidence
             ExecutiveSummaryConfidence? baseline;
             try
@@ -639,11 +761,11 @@ public static class TestForgeTools
             }
 
             _logger?.LogInformation("Starting test case confidence validation with {TestCaseLength} test cases and {AnalysisLength} analysis data", 
-                testCases.Length, originalAnalysis.Length);
+                normalizedTestCases.Length, originalAnalysis.Length);
 
             // Perform confidence validation and adjustment
             var finalConfidenceScore = TestCaseTemplateService.ValidateAndAdjustConfidence(
-                testCases, originalAnalysis, baseline);
+                normalizedTestCases, originalAnalysis, baseline);
 
             // Create comprehensive validation response
             var validationResponse = new

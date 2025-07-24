@@ -12,6 +12,48 @@ namespace TestForge.McpServer.Services;
 public static class JiraXmlAnalysisService
 {
     /// <summary>
+    /// Converts Jira XML to ParsedJiraData for downstream processing
+    /// </summary>
+    /// <param name="jiraXml">Raw Jira XML string</param>
+    /// <returns>ParsedJiraData object or null if parsing fails</returns>
+    public static ParsedJiraData? ConvertXmlToParsedJiraData(string jiraXml)
+    {
+        var validation = JiraXmlValidationService.Validate(jiraXml);
+        string cleanXml = jiraXml;
+        var validationObj = JsonSerializer.Deserialize<dynamic>(validation);
+        bool isValid = validationObj?.GetProperty("isValid").GetBoolean() ?? false;
+        if (!isValid)
+        {
+            var cleanResult = JiraXmlCleaningService.Clean(jiraXml);
+            var cleanObj = JsonSerializer.Deserialize<dynamic>(cleanResult);
+            if (cleanObj?.GetProperty("success").GetBoolean() == true)
+            {
+                cleanXml = cleanObj.GetProperty("cleanedXml").GetString() ?? jiraXml;
+            }
+            else
+            {
+                return null;
+            }
+        }
+        var parseResult = JiraStoryParsingService.ParseJiraXml(cleanXml);
+        if (!parseResult.IsSuccess || parseResult.Story == null)
+        {
+            return null;
+        }
+        var story = parseResult.Story;
+        return new ParsedJiraData
+        {
+            TicketId = story.IssueKey,
+            Summary = story.Summary,
+            Description = story.Description,
+            Type = story.IssueType,
+            Priority = story.Priority,
+            AcceptanceCriteria = story.AcceptanceCriteria,
+            CustomFields = story.CustomFields,
+            ComplexityScore = 0.0 // Optionally calculate if needed
+        };
+    }
+    /// <summary>
     /// Analyzes raw Jira XML and returns structured data optimized for LLM enhancement
     /// </summary>
     /// <param name="jiraXml">The raw Jira XML content to analyze</param>
