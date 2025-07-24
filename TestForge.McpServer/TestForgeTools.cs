@@ -339,8 +339,13 @@ public static class TestForgeTools
     /// </summary>
     /// <param name="jiraXml">The raw Jira XML content to process</param>
     /// <param name="enhancementConfig">Enhancement configuration for test generation</param>
-    /// <returns>Complete test suite with comprehensive coverage</returns>
-    [McpServerTool, Description("AUTOMATED COMPREHENSIVE TESTING: Processes Jira XML and automatically generates comprehensive test cases with maximum coverage across all categories. Combines validation, cleaning, analysis, and enhancement in a single workflow.")]
+    /// <returns>
+    /// Complete test suite with comprehensive coverage.
+    /// 
+    /// <b>Output JSON includes a top-level field <c>testrailFormat</c> containing TestRail-compatible results.</b>
+    /// Consumers (including LLMs) should use <c>testrailFormat</c> for direct TestRail import or integration.
+    /// </returns>
+    [McpServerTool, Description("AUTOMATED COMPREHENSIVE TESTING: Processes Jira XML and automatically generates comprehensive test cases with maximum coverage across all categories. Combines validation, cleaning, analysis, and enhancement in a single workflow. Output JSON includes a top-level field 'testrailFormat' for TestRail integration.")]
     public static async Task<string> GenerateComprehensiveTestSuite(
         [Description("Raw Jira XML content")] string jiraXml,
         [Description("Enhancement configuration JSON")] string enhancementConfig = "")
@@ -408,6 +413,15 @@ public static class TestForgeTools
             }
 
             // Step 4: Generate comprehensive enhanced test suite
+            if (parsedData == null)
+            {
+                return JsonSerializer.Serialize(new {
+                    success = false,
+                    error = "Parsed Jira data is null. Cannot generate enhanced test suite.",
+                    details = "Ensure Jira XML is valid and contains required fields."
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+
             var enhancedSuite = await _llmEnhancementService.EnhanceTestCases(parsedData, initialTests, config);
 
             // Step 5: Format for TestRail
@@ -420,6 +434,7 @@ public static class TestForgeTools
             {
                 success = true,
                 message = $"Generated comprehensive test suite with {enhancedSuite.TotalTestCount} test cases",
+                testrailFormat = formattedOutput, // Top-level field for TestRail-compatible results
                 summary = new
                 {
                     totalTests = enhancedSuite.TotalTestCount,
@@ -447,7 +462,6 @@ public static class TestForgeTools
                 },
                 coverageBreakdown = enhancedSuite.CoverageSummary,
                 testSuite = enhancedSuite,
-                formattedOutput = formattedOutput,
                 generatedAt = DateTime.UtcNow
             };
 
